@@ -1,0 +1,28 @@
+[project]
+name = "htcondor-rest"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Nick Tyler", email = "nicholas.s.tyler.4@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.136.1",
+    "gunicorn>=25.3.0",
+    "htcondor>=25.8.2",
+    "loguru>=0.7.3",
+    "uvicorn>=0.46.0",
+]
+
+[project.scripts]
+htcondor-rest = "htcondor_rest:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+]
