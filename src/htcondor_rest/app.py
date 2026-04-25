@@ -6,7 +6,7 @@ import json
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
-from .models import CondorSubmit, CondorJob
+from .models import CondorSubmit, CondorJob, CondorSubmitResults
 
 import htcondor2 as htcondor
 from classad2 import ClassAd
@@ -19,9 +19,9 @@ if os.environ.get("PASSWORDFILE") is not None:
     pass_file_path = Path(os.environ.get("PASSWORDFILE")).resolve().absolute()
     auth = pass_file_path.read_text().split("\n")
     auth_db = [a.rstrip("/n") for a in auth]
-    logger.info(f"Auth: {auth_db}")
+    logger.warning("Using default AUTH")
 else:
-    logger.info(f"Auth: {auth_db}")
+    logger.info(f"Keys in auth database {len(auth_db)}")
 
 
 @app.get("/")
@@ -133,6 +133,12 @@ def submit(
     job = htcondor.Submit(job_request.model_dump(exclude_none=True))
     schedd = htcondor.Schedd()
     submit_result = schedd.submit(job, count=1)
-    logger.info("Submitting new job")
+    logger.info(f"Submitting new job {submit_result.cluster()}")
 
-    return {"cluster": str(submit_result.cluster()), "submit": str(job)}
+    return {
+        "cluster": submit_result.cluster(),
+        "clusterad": CondorJob(**json.loads(submit_result.clusterad().formatJson())),
+        "first_proc": submit_result.first_proc(),
+        "num_procs": submit_result.num_procs(),
+        "submit_script": str(job),
+    }

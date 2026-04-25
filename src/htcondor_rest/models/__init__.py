@@ -303,3 +303,26 @@ class CondorJob(BaseModel):
             return int(v)
         except ValueError:
             return None
+
+
+class CondorSubmitResults(BaseModel):
+    cluster: Optional[str | int] = Field(
+        None,
+        description=("Cluster ID"),
+    )
+    clusterad: Optional[str | CondorJob] = Field(
+        None,
+        description=("CondorJob definition from submission"),
+    )
+    first_proc: Optional[str | int] = Field(
+        None,
+        description=("First Proc"),
+    )
+    num_procs: Optional[str | int] = Field(
+        None,
+        description=("Number of Proc"),
+    )
+    submit_script: Optional[str] = Field(
+        None,
+        description=("Rendered Submit Script"),
+    )
