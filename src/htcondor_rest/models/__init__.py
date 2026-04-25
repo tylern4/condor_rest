@@ -1,9 +1,11 @@
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class CondorSubmit(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    jobbatchname: Optional[str] = Field(None, description="Desired job batch name")
     executable: Optional[str] = Field(
         None, description="Path to the executable (relative to the submit directory)."
     )
@@ -83,6 +85,7 @@ class CondorJob(BaseModel):
     # ------------------------------------------------------------------
     # Core scalar fields (most of them are directly convertible)
     # ------------------------------------------------------------------
+    JobBatchName: Optional[str] = Field(None, alias="JobBatchName")
     In: Optional[str] = Field(None, alias="In")
     Cmd: Optional[str] = Field(None, alias="Cmd")
     Err: Optional[str] = Field(None, alias="Err")

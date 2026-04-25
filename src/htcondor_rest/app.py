@@ -19,9 +19,9 @@ if os.environ.get("PASSWORDFILE") is not None:
     pass_file_path = Path(os.environ.get("PASSWORDFILE")).resolve().absolute()
     auth = pass_file_path.read_text().split("\n")
     auth_db = [a.rstrip("/n") for a in auth]
-    logger.warning("Using default AUTH")
-else:
     logger.info(f"Keys in auth database {len(auth_db)}")
+else:
+    logger.warning("Using default AUTH")
 
 
 @app.get("/")
@@ -135,10 +135,14 @@ def submit(
     submit_result = schedd.submit(job, count=1)
     logger.info(f"Submitting new job {submit_result.cluster()}")
 
-    return {
-        "cluster": submit_result.cluster(),
-        "clusterad": CondorJob(**json.loads(submit_result.clusterad().formatJson())),
-        "first_proc": submit_result.first_proc(),
-        "num_procs": submit_result.num_procs(),
-        "submit_script": str(job),
-    }
+    return CondorSubmitResults().model_validate(
+        {
+            "cluster": submit_result.cluster(),
+            "clusterad": CondorJob(
+                **json.loads(submit_result.clusterad().formatJson())
+            ),
+            "first_proc": submit_result.first_proc(),
+            "num_procs": submit_result.num_procs(),
+            "submit_script": str(job),
+        }
+    )
