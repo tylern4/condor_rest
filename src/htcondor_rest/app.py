@@ -6,7 +6,12 @@ import json
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
-from .models import CondorSubmit, CondorJob, CondorSubmitResults
+from .models import (
+    CondorStatus,
+    CondorSubmit,
+    CondorJob,
+    CondorSubmitResults,
+)
 
 import htcondor2 as htcondor
 from classad2 import ClassAd
@@ -25,13 +30,13 @@ else:
 
 
 @app.get("/")
-def read_root():
+async def read_root():
     logger.info("Checking Health")
     return {"status": True}
 
 
 @app.get("/condor_q")
-def jobs(
+async def jobs(
     token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ) -> List[CondorJob]:
     if token.credentials not in auth_db:
@@ -52,7 +57,7 @@ def jobs(
 
 
 @app.get("/condor_q/{job_id}")
-def job(
+async def job(
     job_id: int,
     token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ) -> CondorJob:
@@ -75,7 +80,7 @@ def job(
 
 
 @app.get("/condor_history")
-def histories(
+async def histories(
     token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ):
     if token.credentials not in auth_db:
@@ -95,7 +100,7 @@ def histories(
 
 
 @app.get("/condor_history/{job_id}")
-def history(
+async def history(
     job_id: int,
     token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ):
@@ -121,7 +126,7 @@ def history(
 
 
 @app.post("/condor_submit")
-def submit(
+async def submit(
     job_request: CondorSubmit,
     token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ):
@@ -146,3 +151,35 @@ def submit(
             "submit_script": str(job),
         }
     )
+
+
+@app.get("/condor_status")
+async def condor_status():
+    coll = htcondor.Collector()
+    nodes = []
+    for n in coll.query():
+        try:
+            node = CondorStatus(**json.loads(n.formatJson()))
+            nodes.append(node)
+        except Exception as exp:
+            logger.exception(f"Could not convert job data {exp}")
+            logger.error(f"Job data looks like: {n}")
+    logger.info(f"Found {len(nodes)} nodes")
+
+    return nodes
+
+
+@app.get("/condor_nodes")
+async def condor_nodes():
+    coll = htcondor.Collector()
+    nodes = []
+    for n in coll.query(constraint='MyType=="Machine"'):
+        try:
+            node = CondorStatus(**json.loads(n.formatJson()))
+            nodes.append(node)
+        except Exception as exp:
+            logger.exception(f"Could not convert job data {exp}")
+            logger.error(f"Job data looks like: {n}")
+    logger.info(f"Found {len(nodes)} nodes")
+
+    return nodes
