@@ -51,6 +51,7 @@ async def jobs(
         except Exception as exp:
             logger.exception(f"Could not convert job data {exp}")
             logger.error(f"Job data looks like: {q}")
+            raise HTTPException(500, f"{exp}")
 
     logger.info(f"Found {len(jobs)} jobs")
     return jobs
@@ -104,6 +105,7 @@ async def histories(
         except Exception as exp:
             logger.exception(f"Could not convert job data {exp}")
             logger.error(f"Job data looks like: {h}")
+            raise HTTPException(500, f"{exp}")
     logger.info(f"Found {len(jobs)} jobs")
     return jobs
 
@@ -168,6 +170,24 @@ async def submit(
     )
 
 
+@app.delete("/condor_rm/{job_id}")
+async def condor_rm(
+    job_id: int,
+    token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+):
+    if token.credentials not in auth_db:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    logger.info(f"Removing {job_id}")
+    try:
+        schedd = htcondor.Schedd()
+        out = schedd.act(htcondor.JobAction.Remove, [str(job_id)])
+        job = CondorJob(**json.loads(out.formatJson()))
+        return job
+    except Exception as exp:
+        logger.debug(f"Job removal failed {exp}")
+        raise HTTPException(500, f"{exp}")
+
+
 @app.get("/condor_status")
 async def condor_status():
     coll = htcondor.Collector()
@@ -179,6 +199,7 @@ async def condor_status():
         except Exception as exp:
             logger.exception(f"Could not convert job data {exp}")
             logger.error(f"Job data looks like: {n}")
+            raise HTTPException(500, f"{exp}")
     logger.info(f"Found {len(nodes)} nodes")
 
     return nodes
@@ -195,6 +216,7 @@ async def condor_nodes():
         except Exception as exp:
             logger.exception(f"Could not convert job data {exp}")
             logger.error(f"Job data looks like: {n}")
+            raise HTTPException(500, f"{exp}")
     logger.info(f"Found {len(nodes)} nodes")
 
     return nodes
