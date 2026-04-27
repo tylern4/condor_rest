@@ -180,9 +180,8 @@ async def condor_rm(
     logger.info(f"Removing {job_id}")
     try:
         schedd = htcondor.Schedd()
-        out = schedd.act(htcondor.JobAction.Remove, [str(job_id)])
-        job = CondorJob(**json.loads(out.formatJson()))
-        return job
+        schedd.act(htcondor.JobAction.Remove, [str(job_id)])
+        return True
     except Exception as exp:
         logger.debug(f"Job removal failed {exp}")
         raise HTTPException(500, f"{exp}")
