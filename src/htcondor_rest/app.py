@@ -23,7 +23,7 @@ auth_db = ["password"]
 if os.environ.get("PASSWORDFILE") is not None:
     pass_file_path = Path(os.environ.get("PASSWORDFILE")).resolve().absolute()
     auth = pass_file_path.read_text().split("\n")
-    auth_db = [a.rstrip("/n") for a in auth]
+    auth_db = [a.rstrip("/n") for a in auth if a != ""]
     logger.info(f"Keys in auth database {len(auth_db)}")
 else:
     logger.warning("Using default AUTH")
@@ -66,16 +66,25 @@ async def job(
     logger.info(f"Getting condor_q for {job_id}")
     schedd = htcondor.Schedd()
     try:
+        # Query the job queue for the specific job ID.
         q: ClassAd = schedd.query(constraint=f"ClusterId=={job_id}")
-        if len(q) == 0:
-            return HTTPException(
-                status_code=404, detail=f"Job id {job_id} not found in queue"
-            )
+    except Exception as exp:
+        logger.exception(f"Could not get job data {exp}")
+        raise HTTPException(status_code=500, detail="Error getting job data")
+    # If no job is found, raise a 404 error.
+    if len(q) == 0:
+        raise HTTPException(
+            status_code=404, detail=f"Job id {job_id} not found in queue"
+        )
+
+    # Attempt to convert the job data to a CondorJob model.
+    try:
         logger.debug(f"{q}")
         job = CondorJob(**json.loads(q[0].formatJson()))
     except Exception as exp:
         logger.exception(f"Could not convert job data {exp}")
         logger.error(f"Job data looks like: {q}")
+        raise HTTPException(status_code=500, detail="Error converting job data")
     return job
 
 
@@ -108,20 +117,21 @@ async def history(
         raise HTTPException(status_code=401, detail="Unauthorized")
     logger.info("Getting condor_history")
     schedd = htcondor.Schedd()
+    # Query the job history for the specific job ID.
+    h: ClassAd = schedd.history(constraint=f"ClusterId=={job_id}")
+    # If no history entry is found, raise a 404 error.
+    if len(h) == 0:
+        raise HTTPException(
+            status_code=404, detail=f"Job id {job_id} not found in history"
+        )
+    # Attempt to convert the history data to a CondorJob model.
     try:
-        h: ClassAd = schedd.history(constraint=f"ClusterId=={job_id}")
-        if len(h) == 0:
-            return HTTPException(
-                status_code=404, detail=f"Job id {job_id} not found in history"
-            )
         logger.debug(f"{h}")
         job = CondorJob(**json.loads(h[0].formatJson()))
     except Exception as exp:
         logger.exception(f"Could not convert job data {exp}")
         logger.error(f"Job data looks like: {h}")
-        raise HTTPException(
-            status_code=404, detail=f"Job id {job_id} not found in history"
-        )
+        raise HTTPException(status_code=500, detail="Error converting job data")
     return job
 
 
@@ -134,11 +144,16 @@ async def submit(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     logger.info("Starting new job submit")
-    logger.debug(f"{job_request.model_dump_json(exclude_none=True)}")
+    logger.debug(f"{job_request.model_dump(exclude_none=True)}")
     job = htcondor.Submit(job_request.model_dump(exclude_none=True))
+    logger.debug(f"{job}")
     schedd = htcondor.Schedd()
-    submit_result = schedd.submit(job, count=1)
-    logger.info(f"Submitting new job {submit_result.cluster()}")
+    try:
+        submit_result = schedd.submit(job, count=1)
+        logger.info(f"Submitting new job {submit_result.cluster()}")
+    except Exception as exp:
+        logger.debug(f"Job submission failed {exp}")
+        raise HTTPException(500, f"{exp}")
 
     return CondorSubmitResults().model_validate(
         {

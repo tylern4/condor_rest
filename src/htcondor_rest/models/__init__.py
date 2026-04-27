@@ -10,70 +10,68 @@ class CondorStatus(BaseModel):
 class CondorSubmit(BaseModel):
     model_config = ConfigDict(extra="allow")
     jobbatchname: Optional[str] = Field(
-        None, description="Desired job batch name", alias="JobBatchName"
+        None,
+        description="Desired job batch name",
     )
     executable: Optional[str] = Field(
         None,
         description="Path to the executable (relative to the submit directory).",
-        alias="Executable",
     )
     arguments: Optional[str] = Field(
-        None, description=("Command-line arguments space separated"), alias="Arguments"
+        None,
+        description=("Command-line arguments space separated"),
     )
     environment: Optional[str] = Field(
-        None, description="Environment variables", alias="Environment"
+        None,
+        description="Environment variables",
     )
     error: Optional[str] = Field(
         None,
         description="File that receives the job's *stderr* (defaults to /dev/null on Unix).",
-        alias="Error",
     )
     input: Optional[str] = Field(
         None,
         description="File that provides *stdin* to the job (defaults to /dev/null on Unix).",
-        alias="Input",
     )
     output: Optional[str] = Field(
         None,
         description="File that receives the job's *stdout* (defaults to /dev/null on Unix).",
-        alias="Output",
     )
     log: Optional[str] = Field(
-        None, description="Event-log file for the whole cluster.", alias="Log"
+        None,
+        description="Event-log file for the whole cluster.",
     )
     log_xml: Optional[bool] = Field(
         None,
         description="If true, the event log is written in ClassAd XML.",
-        alias="LogXml",
     )
     priority: Optional[int | str] = Field(
-        None, description="Job priority (integer, default 0).", alias="Priority"
+        None,
+        description="Job priority (integer, default 0).",
     )
     request_cpus: Optional[int | str] = Field(
         None,
         description="Number of CPU cores requested (default 1).",
-        alias="RequestCpus",
     )
     request_memory: Optional[str] = Field(
         None,
         description="Memory request - stored internally as KiB.  Accepts int (KiB) or str with units.",
-        alias="RequestMemory",
     )
     request_disk: Optional[str] = Field(
         None,
         description="Disk request - stored internally as KiB.  Accepts int or unit string.",
-        alias="RequestDisk",
     )
     request_gpus: Optional[int | str] = Field(
-        None, description="Number of GPUs requested.", alias="RequestGpus"
+        None,
+        description="Number of GPUs requested.",
     )
     require_gpus: Optional[str] = Field(
-        None, description="GPU constraint expression.", alias="RequireGpus"
+        None,
+        description="GPU constraint expression.",
     )
     request_custom: Optional[Dict[str, int]] = Field(
         None,
         description="Custom resources: ``request_<name> = <quantity>``.",
-        alias="RequestCustom",
     )
     model_config = {
         "json_schema_extra": {
