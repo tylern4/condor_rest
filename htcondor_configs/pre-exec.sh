@@ -1,18 +1,15 @@
 #!/bin/bash
 
-# If variable is set and the file does not exist make a new "Random" password
-# if [[ ! -f "/etc/condor/passwords.d/${PASSWORDFILE}" ]]; then
-#     uuidgen -r | sed 's/-//g' > /etc/condor/passwords.d/"${PASSWORDFILE}"
-#     cp /etc/condor/passwords.d/"${PASSWORDFILE}" /app/"${PASSWORDFILE}"
-#     chown submituser:submituser /app/"${PASSWORDFILE}"
-#     cat /etc/condor/passwords.d/"${PASSWORDFILE}" 
-# fi
 
-# # If variable is set and the file does not exist make a new "Random" password
-# if [[ ! -f "/app/${PASSWORDFILE}" ]]; then
-#     cp /etc/condor/passwords.d/"${PASSWORDFILE}" /app/"${PASSWORDFILE}"
-#     chown submituser:submituser /app/"${PASSWORDFILE}"
-#     cat /app/"${PASSWORDFILE}" 
-# fi
 
-# chown -R submituser:submituser /app
+if [[ -n "$HTCONDOR_WORKER" ]]; then
+    case "${HTCONDOR_WORKER,,}" in
+        0|false|False)
+            echo "DAEMON_LIST = MASTER COLLECTOR NEGOTIATOR SCHEDD" >> /etc/condor/condor_config.local
+            ;;
+    esac
+fi
+
+if [[ -n "$HTCONDOR_PORT" ]]; then
+    echo "COLLECTOR_PORT = ${HTCONDOR_PORT}" >> /etc/condor/condor_config.local
+fi
