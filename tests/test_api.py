@@ -25,9 +25,15 @@ class _DummySubmit:
     pass
 
 
+# Dummy JobAction to mimic htcondor.JobAction enum
+class _DummyJobAction:
+    Remove = "Remove"
+
+
 htcondor2.Schedd = _DummySchedd
 htcondor2.Collector = _DummyCollector
 htcondor2.Submit = _DummySubmit
+htcondor2.JobAction = _DummyJobAction
 sys.modules["htcondor2"] = htcondor2
 
 # Setup a dummy ``classad2`` module with a placeholder ``ClassAd`` class.
@@ -290,3 +296,28 @@ def test_condor_nodes(client, mock_htcondor):
     data = response.json()
     assert isinstance(data, list)
     assert data[0]["Name"] == "node2"
+
+
+def test_condor_rm(client, mock_htcondor, monkeypatch):
+    """Test removing a job returns the expected job data"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    DummyJob = mock_htcondor["DummyJob"]
+
+    # Define a dummy act method that returns a DummyJob with the given job_id
+    def act(self, job_action, job_ids):
+        job_id = int(job_ids[0])
+        return DummyJob({"ClusterId": job_id, "JobStatus": 5})
+
+    monkeypatch.setattr(DummySchedd, "act", act, raising=False)
+    response = client.delete(
+        "/condor_rm/123", headers={"Authorization": "Bearer password"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ClusterId"] == 123
+
+
+def test_unauthorized_condor_rm(client):
+    """Test that accessing /condor_rm without auth returns 401 Unauthorized"""
+    response = client.delete("/condor_rm/123")
+    assert response.status_code == 401
