@@ -18,4 +18,3 @@ RUN uv sync --frozen --no-install-project
 
 COPY --chown=submituser:submituser src /app/
 RUN uv sync --frozen
-USER root
