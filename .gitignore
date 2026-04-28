@@ -10,3 +10,4 @@ wheels/
 .venv
 # Ignore password file
 .passwords
+scratch
