@@ -30,3 +30,15 @@ jobs:
           tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build Spin
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64
+          context: .
+          file: spin.Dockerfile
+          push: true
+          load: false
+          tags: ghcr.io/${{ github.repository }}:spin-${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
