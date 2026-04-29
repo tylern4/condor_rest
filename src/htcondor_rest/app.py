@@ -20,11 +20,13 @@ app = FastAPI()
 security = HTTPBearer()
 
 auth_db = ["password"]
-if os.environ.get("PASSWORDFILE") is not None:
-    pass_file_path = Path(os.environ.get("PASSWORDFILE")).resolve().absolute()
+if pass_file := os.environ.get("PASSWORDFILE") is not None:
+    pass_file_path = Path(pass_file).resolve().absolute()
     auth = pass_file_path.read_text().split("\n")
     auth_db = [a.rstrip("/n") for a in auth if a != ""]
     logger.info(f"Keys in auth database {len(auth_db)}")
+elif passwords := os.environ.get("PASSWORDS") is not None:
+    auth_db = passwords.split(";")
 else:
     logger.warning("Using default AUTH")
 
