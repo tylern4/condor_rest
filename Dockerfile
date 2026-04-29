@@ -23,4 +23,4 @@ RUN uv sync --frozen --no-install-project
 COPY htcondor_configs/start.sh /app/start.sh
 COPY src /app/
 RUN uv sync --frozen
-RUN chmod -R a+rwx /app/.venv /root/.local
+RUN chmod a+x /root && chmod -R a+rwx /app/.venv /root/.local
