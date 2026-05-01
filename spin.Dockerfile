@@ -12,6 +12,14 @@ ENV CONDOR_PORT=9000
 COPY htcondor_configs/start.sh /start.sh
 RUN ln -s /usr/libexec/condor/* /usr/libexec
 
+ARG USER=tylern
+ARG UID=95745
+ARG GID=95745
+
+# Create a group and user
+RUN groupadd -g $GID $USER && \
+    useradd -m -u $UID -g $GID -s /bin/bash $USER
+
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1
