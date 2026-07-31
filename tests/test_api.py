@@ -2,6 +2,7 @@ import sys
 import types
 import json
 import enum
+import time
 import pytest
 from fastapi.testclient import TestClient
 
@@ -79,6 +80,16 @@ class _DummyDaemonType(enum.IntEnum):
     Generic = 18
 
 
+class _DummyJobStatus(enum.IntEnum):
+    IDLE = 1
+    RUNNING = 2
+    REMOVED = 3
+    COMPLETED = 4
+    HELD = 5
+    TRANSFERRING_OUTPUT = 6
+    SUSPENDED = 7
+
+
 htcondor2.Schedd = _DummySchedd
 htcondor2.Collector = _DummyCollector
 htcondor2.Submit = _DummySubmit
@@ -87,6 +98,7 @@ htcondor2.param = None
 htcondor2.JobAction = _DummyJobAction
 htcondor2.AdType = _DummyAdType
 htcondor2.DaemonType = _DummyDaemonType
+htcondor2.JobStatus = _DummyJobStatus
 sys.modules["htcondor2"] = htcondor2
 
 # Setup a dummy ``classad2`` module with placeholder classes.
@@ -140,6 +152,9 @@ def mock_htcondor(monkeypatch):
 
         def formatJson(self) -> str:
             return json.dumps(self._data)
+
+        def get(self, key: str, default=None):
+            return self._data.get(key, default)
 
     class DummySubmitResult:
         def __init__(self, cluster_id: int = 123):
@@ -297,6 +312,10 @@ def mock_htcondor(monkeypatch):
     monkeypatch.setattr(app_module.htcondor, "Submit", DummySubmit)
     monkeypatch.setattr(app_module.htcondor, "Negotiator", DummyNegotiator)
     monkeypatch.setattr(app_module.htcondor, "param", DummyParam())
+
+    # Reset the cached metrics so every test starts from a clean slate.
+    with app_module._metrics_lock:
+        app_module._metrics.update(app_module._new_metrics())
 
     # Expose the dummy helpers to the test functions.
     return {
@@ -759,3 +778,57 @@ def test_unauthorized_condor_rm(client):
     """Test that accessing /condor_rm without auth returns 401 Unauthorized"""
     response = client.delete("/condor_rm/123")
     assert response.status_code == 401
+
+
+def test_metrics_endpoint_public(client, mock_htcondor):
+    """Test that /metrics is public and returns empty metrics by default"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    DummySchedd.jobs = []
+    DummySchedd.history_data = []
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]
+    body = response.text
+    assert 'htcondor_queue_jobs{status="idle"} 0' in body
+    assert 'htcondor_history_jobs{result="completed",window="all"} 0' in body
+    assert 'htcondor_history_jobs{result="failed",window="all"} 0' in body
+    assert "htcondor_metrics_up 1" in body
+
+
+def test_metrics_queue_counts(client, mock_htcondor):
+    """Test that condor_q job statuses are aggregated correctly"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    DummyJob = mock_htcondor["DummyJob"]
+    DummySchedd.jobs = [
+        DummyJob({"JobStatus": 1}),
+        DummyJob({"JobStatus": 1}),
+        DummyJob({"JobStatus": 2}),
+        DummyJob({"JobStatus": 5}),
+    ]
+    DummySchedd.history_data = []
+    body = client.get("/metrics").text
+    assert 'htcondor_queue_jobs{status="idle"} 2' in body
+    assert 'htcondor_queue_jobs{status="running"} 1' in body
+    assert 'htcondor_queue_jobs{status="held"} 1' in body
+    assert 'htcondor_queue_jobs{status="completed"} 0' in body
+
+
+def test_metrics_history_counts(client, mock_htcondor):
+    """Test that condor_history results are aggregated by result and window"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    DummyJob = mock_htcondor["DummyJob"]
+    DummySchedd.jobs = []
+    now = time.time()
+    DummySchedd.history_data = [
+        DummyJob({"JobStatus": 4, "ExitStatus": 0, "CompletionDate": now - 3600}),
+        DummyJob({"JobStatus": 4, "ExitStatus": 0, "CompletionDate": now - 3 * 86400}),
+        DummyJob({"JobStatus": 4, "ExitStatus": 1, "CompletionDate": now - 3600}),
+        DummyJob({"JobStatus": 3, "ExitStatus": 0}),
+        DummyJob({"JobStatus": 4, "ExitStatus": 0}),
+    ]
+    body = client.get("/metrics").text
+    assert 'htcondor_history_jobs{result="completed",window="all"} 3' in body
+    assert 'htcondor_history_jobs{result="completed",window="24h"} 1' in body
+    assert 'htcondor_history_jobs{result="completed",window="7d"} 2' in body
+    assert 'htcondor_history_jobs{result="failed",window="all"} 1' in body
+    assert 'htcondor_history_jobs{result="failed",window="24h"} 1' in body

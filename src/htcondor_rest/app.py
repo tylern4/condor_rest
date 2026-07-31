@@ -1,10 +1,13 @@
+import contextlib
+import json
 import os
 import secrets
+import threading
+import time
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Optional
-import json
+from typing import Annotated, Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
 from .models import (
@@ -22,7 +25,126 @@ from .models import (
 import htcondor2 as htcondor
 from classad2 import ClassAd, ExprTree
 
-app = FastAPI()
+# ---------------------------------------------------------------------------
+# Prometheus metrics
+# ---------------------------------------------------------------------------
+# The job queue and job history are aggregated periodically by a background
+# thread and cached in ``_metrics``. The public ``/metrics`` endpoint serves
+# the cached counts (refreshing the cache first if it is stale).
+JOB_STATUS_NAMES = {
+    htcondor.JobStatus.IDLE: "idle",
+    htcondor.JobStatus.RUNNING: "running",
+    htcondor.JobStatus.REMOVED: "removed",
+    htcondor.JobStatus.COMPLETED: "completed",
+    htcondor.JobStatus.HELD: "held",
+    htcondor.JobStatus.TRANSFERRING_OUTPUT: "transferring_output",
+    htcondor.JobStatus.SUSPENDED: "suspended",
+}
+HISTORY_WINDOWS = {"1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400}
+
+_metrics_lock = threading.Lock()
+
+
+def _new_metrics() -> Dict[str, Any]:
+    windows = ["all", *HISTORY_WINDOWS]
+    return {
+        "up": 0,
+        "queue": {name: 0 for name in JOB_STATUS_NAMES.values()},
+        "history": {
+            result: {window: 0 for window in windows}
+            for result in ["completed", "failed"]
+        },
+        "updated_at": 0.0,
+    }
+
+
+_metrics = _new_metrics()
+
+
+def _collect_metrics() -> None:
+    """Query condor_q and condor_history and cache the aggregated counts."""
+    schedd = htcondor.Schedd()
+    queue_counts = {name: 0 for name in JOB_STATUS_NAMES.values()}
+    queue_counts["unknown"] = 0
+    for ad in schedd.query(projection=["JobStatus"]):
+        name = JOB_STATUS_NAMES.get(ad.get("JobStatus"), "unknown")
+        queue_counts[name] += 1
+
+    now = time.time()
+    windows = ["all", *HISTORY_WINDOWS]
+    history_counts = {
+        "completed": {window: 0 for window in windows},
+        "failed": {window: 0 for window in windows},
+    }
+    for ad in schedd.history(projection=["JobStatus", "ExitStatus", "CompletionDate"]):
+        if ad.get("JobStatus") != htcondor.JobStatus.COMPLETED:
+            continue
+        result = "completed" if ad.get("ExitStatus") == 0 else "failed"
+        history_counts[result]["all"] += 1
+        completion = ad.get("CompletionDate")
+        if completion is not None:
+            age = now - completion
+            for window, seconds in HISTORY_WINDOWS.items():
+                if age <= seconds:
+                    history_counts[result][window] += 1
+
+    with _metrics_lock:
+        _metrics["queue"] = queue_counts
+        _metrics["history"] = history_counts
+        _metrics["updated_at"] = now
+        _metrics["up"] = 1
+
+
+def _format_metrics() -> str:
+    with _metrics_lock:
+        up = _metrics["up"]
+        updated_at = _metrics["updated_at"]
+        queue = _metrics["queue"]
+        history = _metrics["history"]
+    lines = [
+        "# HELP htcondor_metrics_up Whether the last metrics collection succeeded (1) or failed (0)",
+        "# TYPE htcondor_metrics_up gauge",
+        f"htcondor_metrics_up {up}",
+        "# HELP htcondor_metrics_last_scrape_seconds Unix timestamp of the last successful metrics collection",
+        "# TYPE htcondor_metrics_last_scrape_seconds gauge",
+        f"htcondor_metrics_last_scrape_seconds {updated_at}",
+        "# HELP htcondor_queue_jobs Number of jobs currently in the queue by status",
+        "# TYPE htcondor_queue_jobs gauge",
+    ]
+    for status, count in queue.items():
+        lines.append(f'htcondor_queue_jobs{{status="{status}"}} {count}')
+    lines += [
+        "# HELP htcondor_history_jobs Number of jobs in the history by result (completed/failed) and time window",
+        "# TYPE htcondor_history_jobs gauge",
+    ]
+    for result, windows in history.items():
+        for window, count in windows.items():
+            lines.append(
+                f'htcondor_history_jobs{{result="{result}",window="{window}"}} {count}'
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _metrics_loop(interval: float) -> None:
+    while True:
+        try:
+            _collect_metrics()
+        except Exception as exp:
+            logger.exception(f"Metrics collection failed: {exp}")
+            with _metrics_lock:
+                _metrics["up"] = 0
+        time.sleep(interval)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    interval = float(os.environ.get("METRICS_INTERVAL", "60"))
+    worker = threading.Thread(target=_metrics_loop, args=(interval,), daemon=True)
+    worker.start()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 security = HTTPBearer()
 
 auth_db = ["password"]
@@ -672,3 +794,29 @@ async def condor_userprio_user(
     logger.info(f"Getting condor_userprio for {user}")
     negotiator = htcondor.Negotiator()
     return _ads_to_json(negotiator.getResourceUsage(user))
+
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics (public)
+# ---------------------------------------------------------------------------
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus metrics aggregated from condor_q and condor_history.
+
+    Public by design: it only exposes aggregate job counts, never
+    identifying job details.
+    """
+    interval = float(os.environ.get("METRICS_INTERVAL", "60"))
+    with _metrics_lock:
+        stale = time.time() - _metrics["updated_at"] >= interval
+    if stale:
+        try:
+            _collect_metrics()
+        except Exception as exp:
+            logger.exception(f"Metrics collection failed: {exp}")
+            with _metrics_lock:
+                _metrics["up"] = 0
+    return Response(
+        content=_format_metrics(),
+        media_type="text/plain; version=0.0.4",
+    )
