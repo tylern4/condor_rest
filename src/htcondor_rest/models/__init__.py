@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
@@ -336,4 +336,81 @@ class CondorSubmitResults(BaseModel):
     submit_script: Optional[str] = Field(
         None,
         description=("Rendered Submit Script"),
+    )
+
+
+class CondorJobAction(BaseModel):
+    job_ids: Optional[List[str]] = Field(
+        None,
+        description=(
+            "Job IDs to act on, e.g. ``['123.0', '123.1']`` or ``['123']`` "
+            "for a whole cluster.  Mutually exclusive with ``constraint``."
+        ),
+    )
+    constraint: Optional[str] = Field(
+        None,
+        description=(
+            "ClassAd expression selecting which jobs to act on, e.g. "
+            "``Owner == \"somebody\"``.  Mutually exclusive with ``job_ids``."
+        ),
+    )
+    reason: Optional[str] = Field(
+        None,
+        description="Free-form justification for the action.",
+    )
+
+
+class CondorEdit(BaseModel):
+    job_ids: Optional[List[str]] = Field(
+        None,
+        description="Job IDs to edit.  Mutually exclusive with ``constraint``.",
+    )
+    constraint: Optional[str] = Field(
+        None,
+        description="ClassAd expression selecting which jobs to edit.",
+    )
+    attr: str = Field(
+        ...,
+        description="ClassAd attribute to change.",
+    )
+    value: str = Field(
+        ...,
+        description="New value for the attribute (string form of a ClassAd expression).",
+    )
+
+
+class CondorExport(BaseModel):
+    job_ids: Optional[List[str]] = Field(
+        None,
+        description="Job IDs to export.  Mutually exclusive with ``constraint``.",
+    )
+    constraint: Optional[str] = Field(
+        None,
+        description="ClassAd expression selecting which jobs to export.",
+    )
+    export_dir: str = Field(
+        ...,
+        description="Write the exported job(s) into this directory.",
+    )
+    new_spool_dir: str = Field(
+        ...,
+        description="The IWD of the exported job(s).",
+    )
+
+
+class CondorImport(BaseModel):
+    import_dir: str = Field(
+        ...,
+        description="Read the imported jobs from this directory.",
+    )
+
+
+class CondorUnexport(BaseModel):
+    job_ids: Optional[List[str]] = Field(
+        None,
+        description="Job IDs to unexport.  Mutually exclusive with ``constraint``.",
+    )
+    constraint: Optional[str] = Field(
+        None,
+        description="ClassAd expression selecting which jobs to unexport.",
     )
