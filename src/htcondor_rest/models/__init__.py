@@ -9,6 +9,10 @@ class CondorStatus(BaseModel):
 
 class CondorSubmit(BaseModel):
     model_config = ConfigDict(extra="allow")
+    count: int = Field(
+        1,
+        description="Number of processes (procs) to submit for this cluster.",
+    )
     jobbatchname: Optional[str] = Field(
         None,
         description="Desired job batch name",
@@ -78,6 +82,7 @@ class CondorSubmit(BaseModel):
             "example": {
                 "executable": "/usr/bin/echo",
                 "arguments": "Hello World",
+                "count": 1,
                 "output": "/tmp/out",
                 "error": "/tmp/err",
                 "log": "/tmp/log",

@@ -436,14 +436,15 @@ async def daemon_history(
 async def submit(
     job_request: CondorSubmit,
 ):
-
     logger.info("Starting new job submit")
     logger.debug(f"{job_request.model_dump(exclude_none=True)}")
-    job = htcondor.Submit(job_request.model_dump(exclude_none=True))
+    submit_data = job_request.model_dump(exclude_none=True)
+    count = submit_data.pop("count", 1)
+    job = htcondor.Submit(submit_data)
     logger.debug(f"{job}")
     schedd = htcondor.Schedd()
     try:
-        submit_result = schedd.submit(job, count=1)
+        submit_result = schedd.submit(job, count=count)
         logger.info(f"Submitting new job {submit_result.cluster()}")
     except Exception as exp:
         logger.debug(f"Job submission failed {exp}")

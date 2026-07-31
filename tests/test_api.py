@@ -520,6 +520,48 @@ def test_condor_submit(client, mock_htcondor):
     assert data["clusterad"]["ClusterId"] == 123
 
 
+def test_condor_submit_count_defaults_to_one(client, mock_htcondor, monkeypatch):
+    """Test that omitting count submits a single process"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    DummySubmitResult = mock_htcondor["DummySubmitResult"]
+    DummySchedd.submit_result = DummySubmitResult(cluster_id=123)
+    calls = {}
+
+    def submit(self, job, count=1, spool=False):
+        calls["count"] = count
+        return self.submit_result
+
+    monkeypatch.setattr(DummySchedd, "submit", submit, raising=False)
+    response = client.post(
+        "/condor_submit",
+        json={"executable": "/usr/bin/echo"},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert calls["count"] == 1
+
+
+def test_condor_submit_custom_count(client, mock_htcondor, monkeypatch):
+    """Test that a provided count is passed through to the schedd"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    DummySubmitResult = mock_htcondor["DummySubmitResult"]
+    DummySchedd.submit_result = DummySubmitResult(cluster_id=123)
+    calls = {}
+
+    def submit(self, job, count=1, spool=False):
+        calls["count"] = count
+        return self.submit_result
+
+    monkeypatch.setattr(DummySchedd, "submit", submit, raising=False)
+    response = client.post(
+        "/condor_submit",
+        json={"executable": "/usr/bin/echo", "count": 5},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert calls["count"] == 5
+
+
 JOB_ACTION_ENDPOINTS = [
     "condor_hold",
     "condor_release",
