@@ -15,11 +15,18 @@ from .models import (
     CondorSubmit,
     CondorJob,
     CondorSubmitResults,
+    CondorSubmitText,
     CondorJobAction,
     CondorEdit,
     CondorExport,
     CondorImport,
     CondorUnexport,
+    CondorJobSpec,
+    CondorRecAction,
+    CondorRecUpdate,
+    CondorRefreshGSIProxy,
+    CondorOCU,
+    CondorAdvertise,
 )
 
 import htcondor2 as htcondor
@@ -432,6 +439,14 @@ async def daemon_history(
 # ---------------------------------------------------------------------------
 # Schedd: submission
 # ---------------------------------------------------------------------------
+# A ``spool=True`` submit stores its ``SubmitResult`` here so a later call to
+# /condor_spool can upload the job's input files (``Schedd.spool`` requires
+# the result object from the original submit, which cannot cross process or
+# request boundaries any other way).
+_spool_lock = threading.Lock()
+_spooled_submit: Optional[Any] = None
+
+
 @router.post("/condor_submit")
 async def submit(
     job_request: CondorSubmit,
@@ -440,16 +455,54 @@ async def submit(
     logger.debug(f"{job_request.model_dump(exclude_none=True)}")
     submit_data = job_request.model_dump(exclude_none=True)
     count = submit_data.pop("count", 1)
+    spool_flag = submit_data.pop("spool", False)
     job = htcondor.Submit(submit_data)
     logger.debug(f"{job}")
     schedd = htcondor.Schedd()
     try:
-        submit_result = schedd.submit(job, count=count)
+        submit_result = schedd.submit(job, count=count, spool=spool_flag)
         logger.info(f"Submitting new job {submit_result.cluster()}")
     except Exception as exp:
         logger.debug(f"Job submission failed {exp}")
         raise HTTPException(500, f"{exp}")
 
+    return _submit_response(submit_result, job, spool_flag)
+
+
+@router.post("/condor_submit_file")
+async def submit_file(
+    body: CondorSubmitText,
+):
+    """Submit a job described by raw condor_submit-language text.
+
+    Unlike ``/condor_submit`` (which takes structured attributes), this
+    endpoint hands the text to ``htcondor.Submit`` verbatim, so the full
+    submit language is supported (queue statements, ``$()`` expansion, ...).
+    """
+    logger.info("Starting new job submit from submit file text")
+    try:
+        job = htcondor.Submit(body.submit_text)
+    except Exception as exp:
+        logger.exception(f"Could not parse submit text {exp}")
+        raise HTTPException(status_code=400, detail=str(exp))
+    logger.debug(f"{job}")
+    schedd = htcondor.Schedd()
+    try:
+        submit_result = schedd.submit(job, count=body.count, spool=body.spool)
+        logger.info(f"Submitting new job {submit_result.cluster()}")
+    except Exception as exp:
+        logger.debug(f"Job submission failed {exp}")
+        raise HTTPException(500, f"{exp}")
+
+    return _submit_response(submit_result, job, body.spool)
+
+
+def _submit_response(submit_result, job, spool_flag: bool = False) -> CondorSubmitResults:
+    """Build the standard submit response, keeping the spooled result for later upload."""
+    if spool_flag:
+        global _spooled_submit
+        with _spool_lock:
+            _spooled_submit = submit_result
     return CondorSubmitResults().model_validate(
         {
             "cluster": submit_result.cluster(),
@@ -629,6 +682,214 @@ async def condor_unexport_jobs(
 
 
 # ---------------------------------------------------------------------------
+# Schedd: file transfer (spool / retrieve)
+# ---------------------------------------------------------------------------
+@router.post("/condor_spool")
+async def condor_spool() -> Dict[str, Any]:
+    """Upload the input files of the most recent ``spool=True`` submit."""
+    global _spooled_submit
+    with _spool_lock:
+        submit_result = _spooled_submit
+    if submit_result is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No prior spooled submission; submit a job with spool=true first",
+        )
+    logger.info(f"Spooling input files for cluster {submit_result.cluster()}")
+    try:
+        htcondor.Schedd().spool(submit_result)
+    except Exception as exp:
+        logger.exception(f"Could not spool job input files {exp}")
+        raise HTTPException(status_code=500, detail=str(exp))
+    return {"cluster": submit_result.cluster()}
+
+
+@router.post("/condor_retrieve")
+async def condor_retrieve(
+    body: CondorJobSpec,
+) -> bool:
+    if body.job_ids is None and body.constraint is None:
+        raise HTTPException(
+            status_code=400, detail="Must provide job_ids or constraint"
+        )
+    spec = body.job_ids if body.job_ids is not None else body.constraint
+    logger.info(f"Retrieving output files for {spec}")
+    try:
+        htcondor.Schedd().retrieve(spec)
+    except Exception as exp:
+        logger.exception(f"Could not retrieve job output {exp}")
+        raise HTTPException(status_code=500, detail=str(exp))
+    return True
+
+
+@router.post("/condor_refresh_gsi_proxy")
+async def condor_refresh_gsi_proxy(
+    body: CondorRefreshGSIProxy,
+) -> int:
+    logger.info(
+        f"Refreshing GSI proxy for {body.cluster}.{body.proc} "
+        f"from {body.proxy_filename} (lifetime {body.lifetime})"
+    )
+    try:
+        return htcondor.Schedd().refreshGSIProxy(
+            body.cluster, body.proc, body.proxy_filename, body.lifetime
+        )
+    except Exception as exp:
+        logger.exception(f"Could not refresh GSI proxy {exp}")
+        raise HTTPException(status_code=500, detail=str(exp))
+
+
+@router.get("/condor_claims")
+async def condor_claims(
+    constraint: Optional[str] = None,
+    projection: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    logger.info("Getting condor_claims")
+    schedd = htcondor.Schedd()
+    return _ads_to_json(
+        schedd.get_claims(
+            constraint=constraint, projection=_projection_list(projection)
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Schedd: one-click university (OCU) claims
+# ---------------------------------------------------------------------------
+@router.post("/condor_create_ocu")
+async def condor_create_ocu(
+    body: CondorOCU,
+) -> Dict[str, Any]:
+    logger.info("Creating OCU claim")
+    try:
+        result = htcondor.Schedd().create_ocu(ClassAd(body.request))
+    except Exception as exp:
+        logger.exception(f"Could not create OCU claim {exp}")
+        raise HTTPException(status_code=500, detail=str(exp))
+    return _ad_to_json(result)
+
+
+@router.post("/condor_remove_ocu")
+async def condor_remove_ocu(
+    body: CondorOCU,
+) -> Dict[str, Any]:
+    logger.info("Removing OCU claim")
+    try:
+        result = htcondor.Schedd().remove_ocu(ClassAd(body.request))
+    except Exception as exp:
+        logger.exception(f"Could not remove OCU claim {exp}")
+        raise HTTPException(status_code=500, detail=str(exp))
+    return _ad_to_json(result)
+
+
+@router.post("/condor_query_ocu")
+async def condor_query_ocu(
+    body: CondorOCU,
+) -> Dict[str, Any]:
+    logger.info("Querying OCU claims")
+    try:
+        result = htcondor.Schedd().query_ocu(ClassAd(body.request))
+    except Exception as exp:
+        logger.exception(f"Could not query OCU claims {exp}")
+        raise HTTPException(status_code=500, detail=str(exp))
+    return _ad_to_json(result)
+
+
+# ---------------------------------------------------------------------------
+# Schedd: user and project accounting records
+# ---------------------------------------------------------------------------
+def _rec_spec(body: CondorRecAction) -> Any:
+    """Build the ``userrec_spec`` argument for the user/project record calls."""
+    if body.spec is not None and body.constraint is not None:
+        raise HTTPException(
+            status_code=400, detail="Provide either spec or constraint, not both"
+        )
+    if body.spec is not None:
+        return body.spec
+    if body.constraint is not None:
+        return ExprTree(body.constraint)
+    raise HTTPException(status_code=400, detail="Must provide spec or constraint")
+
+
+def _rec_ads(ads: List[Dict[str, Any]]) -> List[ClassAd]:
+    return [ClassAd(ad) for ad in ads]
+
+
+def _rec_result(result) -> Dict[str, Any]:
+    if result is None:
+        return {}
+    return json.loads(result.formatJson())
+
+
+def _register_rec_actions(route: str, method: str) -> None:
+    """Register a POST endpoint acting on user (or project) records by name."""
+
+    async def rec_action(body: CondorRecAction) -> Dict[str, Any]:
+        logger.info(f"Applying {method} to accounting records")
+        spec = _rec_spec(body)
+        kwargs: Dict[str, Any] = {}
+        if body.reason is not None:
+            kwargs["reason"] = body.reason
+        try:
+            result = getattr(htcondor.Schedd(), method)(spec, **kwargs)
+        except Exception as exp:
+            logger.exception(f"{method} failed: {exp}")
+            raise HTTPException(status_code=500, detail=str(exp))
+        return _rec_result(result)
+
+    router.add_api_route(
+        f"/condor_{route}",
+        rec_action,
+        methods=["POST"],
+        name=f"condor_{route}",
+        summary=f"Apply {method} to user or project accounting records",
+        tags=["accounting records"],
+    )
+
+
+for _rec_route, _rec_method in {
+    "add_user_rec": "addUserRec",
+    "enable_user_rec": "enableUserRec",
+    "disable_user_rec": "disableUserRec",
+    "remove_user_rec": "removeUserRec",
+    "add_project_rec": "addProjectRec",
+    "enable_project_rec": "enableProjectRec",
+    "disable_project_rec": "disableProjectRec",
+    "remove_project_rec": "removeProjectRec",
+}.items():
+    _register_rec_actions(_rec_route, _rec_method)
+
+
+def _register_rec_update(route: str, method: str) -> None:
+    """Register a POST endpoint that updates user (or project) records."""
+
+    async def rec_update(body: CondorRecUpdate) -> Dict[str, Any]:
+        logger.info(f"Applying {method}")
+        try:
+            result = getattr(htcondor.Schedd(), method)(_rec_ads(body.ads))
+        except Exception as exp:
+            logger.exception(f"{method} failed: {exp}")
+            raise HTTPException(status_code=500, detail=str(exp))
+        return _rec_result(result)
+
+    router.add_api_route(
+        f"/condor_{route}",
+        rec_update,
+        methods=["POST"],
+        name=f"condor_{route}",
+        summary=f"Apply {method} to user or project accounting records",
+        tags=["accounting records"],
+    )
+
+
+for _update_route, _update_method in {
+    "update_user_rec": "updateUserRec",
+    "update_project_rec": "updateProjectRec",
+}.items():
+    _register_rec_update(_update_route, _update_method)
+
+
+# ---------------------------------------------------------------------------
 # Collector: status
 # ---------------------------------------------------------------------------
 @router.get("/condor_status")
@@ -744,6 +1005,55 @@ async def condor_locate_all(
     logger.info(f"Locating all {daemon_type} daemons")
     coll = htcondor.Collector()
     return _ads_to_json(coll.locateAll(daemon_type_enum))
+
+
+@router.get("/condor_direct_query/{daemon_type}")
+async def condor_direct_query(
+    daemon_type: str,
+    name: Optional[str] = None,
+    projection: Optional[str] = None,
+    statistics: Optional[str] = None,
+) -> Dict[str, Any]:
+    daemon_type_enum = DAEMON_TYPES.get(daemon_type.lower())
+    if daemon_type_enum is None:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown daemon type: {daemon_type}"
+        )
+    logger.info(f"Directly querying {daemon_type} daemon {name or '(local)'}")
+    coll = htcondor.Collector()
+    try:
+        ad = coll.directQuery(
+            daemon_type_enum,
+            name=name,
+            projection=_projection_list(projection) or None,
+            statistics=statistics,
+        )
+    except Exception as exp:
+        logger.exception(f"Direct query failed: {exp}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Daemon {name or daemon_type} did not answer the direct query",
+        )
+    return _ad_to_json(ad)
+
+
+@router.post("/condor_advertise")
+async def condor_advertise(
+    body: CondorAdvertise,
+) -> bool:
+    logger.info(
+        f"Advertising {len(body.ads)} ad(s) to the collector using {body.command}"
+    )
+    try:
+        htcondor.Collector().advertise(
+            [ClassAd(ad) for ad in body.ads],
+            command=body.command,
+            use_tcp=body.use_tcp,
+        )
+    except Exception as exp:
+        logger.exception(f"Could not advertise ads {exp}")
+        raise HTTPException(status_code=500, detail=str(exp))
+    return True
 
 
 # ---------------------------------------------------------------------------

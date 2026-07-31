@@ -106,7 +106,8 @@ classad2 = types.ModuleType("classad2")
 
 
 class _DummyClassAd:
-    pass
+    def __init__(self, data=None):
+        self._data = dict(data) if data else {}
 
 
 class _DummyExprTree:
@@ -184,6 +185,8 @@ def mock_htcondor(monkeypatch):
         epoch_history: list[DummyJob] = []
         daemon_history: list[DummyJob] = []
         submit_result: DummySubmitResult = DummySubmitResult()
+        spooled: DummySubmitResult | None = None
+        retrieved: object = None
 
         def __init__(self):
             pass
@@ -249,10 +252,64 @@ def mock_htcondor(monkeypatch):
         def unexport_jobs(self, job_spec):
             return DummyJob({"Unexported": True})
 
+        def spool(self, result):
+            type(self).spooled = result
+
+        def retrieve(self, job_spec):
+            type(self).retrieved = job_spec
+            return None
+
+        def refreshGSIProxy(self, cluster, proc, proxy_filename, lifetime=-1):
+            return lifetime
+
+        def get_claims(self, constraint=None, projection=None):
+            return [DummyJob({"ClaimId": "claim-1"})]
+
+        def create_ocu(self, request):
+            return DummyJob({"OCU": "created"})
+
+        def remove_ocu(self, request):
+            return DummyJob({"OCU": "removed"})
+
+        def query_ocu(self, request):
+            return DummyJob({"OCU": "queried"})
+
+        def addUserRec(self, user_spec):
+            return DummyJob({"UserRec": "added"})
+
+        def enableUserRec(self, user_spec):
+            return DummyJob({"UserRec": "enabled"})
+
+        def disableUserRec(self, user_spec, reason=None):
+            return DummyJob({"UserRec": "disabled"})
+
+        def removeUserRec(self, user_spec, reason=None):
+            return DummyJob({"UserRec": "removed"})
+
+        def updateUserRec(self, user_attributes):
+            return DummyJob({"UserRec": "updated"})
+
+        def addProjectRec(self, project_spec):
+            return DummyJob({"ProjectRec": "added"})
+
+        def enableProjectRec(self, project_spec):
+            return DummyJob({"ProjectRec": "enabled"})
+
+        def disableProjectRec(self, project_spec, reason=None):
+            return DummyJob({"ProjectRec": "disabled"})
+
+        def removeProjectRec(self, project_spec, reason=None):
+            return DummyJob({"ProjectRec": "removed"})
+
+        def updateProjectRec(self, project_attributes):
+            return DummyJob({"ProjectRec": "updated"})
+
     class DummyCollector:
         nodes: list[DummyJob] = []
         located: DummyJob | None = None
         located_all: list[DummyJob] = []
+        direct_queried: DummyJob = DummyJob({"MyType": "Machine"})
+        advertised: object = None
 
         def __init__(self):
             pass
@@ -272,6 +329,12 @@ def mock_htcondor(monkeypatch):
 
         def locateAll(self, daemon_type):
             return self.located_all
+
+        def directQuery(self, daemon_type, name=None, projection=None, statistics=None):
+            return self.direct_queried
+
+        def advertise(self, ad_list, command="UPDATE_AD_GENERIC", use_tcp=True):
+            type(self).advertised = (ad_list, command, use_tcp)
 
     class DummySubmit:
         def __init__(self, data):
@@ -317,6 +380,9 @@ def mock_htcondor(monkeypatch):
     with app_module._metrics_lock:
         app_module._metrics.update(app_module._new_metrics())
 
+    # Reset any in-memory state carried between requests.
+    app_module._spooled_submit = None
+
     # Expose the dummy helpers to the test functions.
     return {
         "DummySchedd": DummySchedd,
@@ -347,7 +413,16 @@ def test_unauthorized_condor_q(client):
 
 @pytest.mark.parametrize(
     "path",
-    ["/", "/condor_status", "/condor_status/node1", "/condor_nodes"],
+    [
+        "/",
+        "/condor_status",
+        "/condor_status/node1",
+        "/condor_nodes",
+        "/condor_spool",
+        "/condor_retrieve",
+        "/condor_direct_query/schedd",
+        "/condor_advertise",
+    ],
 )
 def test_all_endpoints_require_auth(client, path):
     """Test that every route, read or write, is private without a token."""
@@ -560,6 +635,49 @@ def test_condor_submit_custom_count(client, mock_htcondor, monkeypatch):
     )
     assert response.status_code == 200
     assert calls["count"] == 5
+
+
+def test_condor_submit_file(client, mock_htcondor, monkeypatch):
+    """Test submitting a raw condor_submit-language description"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    DummySubmitResult = mock_htcondor["DummySubmitResult"]
+    DummySchedd.submit_result = DummySubmitResult(cluster_id=123)
+    captured = {}
+
+    def submit(self, job, count=0, spool=False):
+        captured["submit"] = job
+        captured["count"] = count
+        return self.submit_result
+
+    monkeypatch.setattr(DummySchedd, "submit", submit, raising=False)
+    response = client.post(
+        "/condor_submit_file",
+        json={"submit_text": "executable = /bin/echo\nqueue 3\n"},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["cluster"] == 123
+    assert data["num_procs"] == 1
+    assert captured["submit"].data == "executable = /bin/echo\nqueue 3\n"
+    assert captured["count"] == 0
+
+
+def test_condor_submit_file_invalid_text(client, mock_htcondor, monkeypatch):
+    """Test that submit text the server cannot parse returns 400"""
+    DummySubmitResult = mock_htcondor["DummySubmitResult"]
+    import htcondor_rest.app as app_module
+
+    def bad_submit(self, text):
+        raise ValueError("parse error")
+
+    monkeypatch.setattr(app_module.htcondor, "Submit", bad_submit, raising=False)
+    response = client.post(
+        "/condor_submit_file",
+        json={"submit_text": "not valid"},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 400
 
 
 JOB_ACTION_ENDPOINTS = [
@@ -874,3 +992,190 @@ def test_metrics_history_counts(client, mock_htcondor):
     assert 'htcondor_history_jobs{result="completed",window="7d"} 2' in body
     assert 'htcondor_history_jobs{result="failed",window="all"} 1' in body
     assert 'htcondor_history_jobs{result="failed",window="24h"} 1' in body
+
+
+def test_condor_spool(client, mock_htcondor):
+    """Test spooling a previously spooled submit uploads its input files"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    response = client.post(
+        "/condor_submit",
+        json={"executable": "/bin/echo", "spool": True},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    response = client.post("/condor_spool", headers=AUTH_HEADERS)
+    assert response.status_code == 200
+    assert response.json() == {"cluster": 123}
+    assert DummySchedd.spooled is not None
+
+
+def test_condor_spool_without_prior_submit(client, mock_htcondor):
+    """Test that /condor_spool without a prior spooled submit returns 400"""
+    response = client.post("/condor_spool", headers=AUTH_HEADERS)
+    assert response.status_code == 400
+
+
+def test_condor_retrieve(client, mock_htcondor):
+    """Test retrieving output files for a set of jobs"""
+    DummySchedd = mock_htcondor["DummySchedd"]
+    response = client.post(
+        "/condor_retrieve",
+        json={"job_ids": ["123.0", "123.1"]},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json() is True
+    assert DummySchedd.retrieved == ["123.0", "123.1"]
+
+
+def test_condor_retrieve_requires_spec(client, mock_htcondor):
+    """Test that /condor_retrieve without a spec returns 400"""
+    response = client.post("/condor_retrieve", json={}, headers=AUTH_HEADERS)
+    assert response.status_code == 400
+
+
+def test_condor_refresh_gsi_proxy(client, mock_htcondor):
+    """Test refreshing a job's GSI proxy returns the remaining lifetime"""
+    response = client.post(
+        "/condor_refresh_gsi_proxy",
+        json={"cluster": 123, "proc": 0, "proxy_filename": "/tmp/proxy", "lifetime": 60},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json() == 60
+
+
+def test_condor_claims(client, mock_htcondor):
+    """Test querying the schedd for claimed-slot classads"""
+    response = client.get(
+        "/condor_claims", params={"constraint": "Owner == \"bob\""}, headers=AUTH_HEADERS
+    )
+    assert response.status_code == 200
+    assert response.json() == [{"ClaimId": "claim-1"}]
+
+
+def test_condor_ocu_claims(client, mock_htcondor):
+    """Test creating, querying and removing OCU claims"""
+    for route, expected in [
+        ("create_ocu", {"OCU": "created"}),
+        ("query_ocu", {"OCU": "queried"}),
+        ("remove_ocu", {"OCU": "removed"}),
+    ]:
+        response = client.post(
+            f"/condor_{route}",
+            json={"request": {"Owner": "bob", "RequestCpus": 2}},
+            headers=AUTH_HEADERS,
+        )
+        assert response.status_code == 200
+        assert response.json() == expected
+
+
+def test_user_rec_actions(client, mock_htcondor):
+    """Test acting on user accounting records by name and by constraint"""
+    for route, expected in [
+        ("add_user_rec", {"UserRec": "added"}),
+        ("enable_user_rec", {"UserRec": "enabled"}),
+    ]:
+        response = client.post(
+            f"/condor_{route}", json={"spec": "bob@example.com"}, headers=AUTH_HEADERS
+        )
+        assert response.status_code == 200
+        assert response.json() == expected
+    for route, expected in [
+        ("disable_user_rec", {"UserRec": "disabled"}),
+        ("remove_user_rec", {"UserRec": "removed"}),
+    ]:
+        response = client.post(
+            f"/condor_{route}",
+            json={"spec": "bob@example.com", "reason": "maintenance"},
+            headers=AUTH_HEADERS,
+        )
+        assert response.status_code == 200
+        assert response.json() == expected
+    response = client.post(
+        "/condor_enable_user_rec",
+        json={"constraint": 'Name == "bob@example.com"'},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json() == {"UserRec": "enabled"}
+
+
+def test_project_rec_actions(client, mock_htcondor):
+    """Test acting on project accounting records"""
+    for route, expected in [
+        ("add_project_rec", {"ProjectRec": "added"}),
+        ("enable_project_rec", {"ProjectRec": "enabled"}),
+        ("disable_project_rec", {"ProjectRec": "disabled"}),
+        ("remove_project_rec", {"ProjectRec": "removed"}),
+    ]:
+        response = client.post(
+            f"/condor_{route}", json={"spec": "project-1"}, headers=AUTH_HEADERS
+        )
+        assert response.status_code == 200
+        assert response.json() == expected
+
+
+def test_rec_action_requires_spec(client, mock_htcondor):
+    """Test that rec actions without spec or constraint return 400"""
+    response = client.post("/condor_add_user_rec", json={}, headers=AUTH_HEADERS)
+    assert response.status_code == 400
+    response = client.post(
+        "/condor_add_user_rec",
+        json={"spec": "bob", "constraint": "Name == \"bob\""},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 400
+
+
+def test_rec_updates(client, mock_htcondor):
+    """Test updating user and project accounting records"""
+    response = client.post(
+        "/condor_update_user_rec",
+        json={"ads": [{"User": "bob", "Usage": 10}]},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json() == {"UserRec": "updated"}
+    response = client.post(
+        "/condor_update_project_rec",
+        json={"ads": [{"Name": "project-1", "Usage": 10}]},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json() == {"ProjectRec": "updated"}
+
+
+def test_condor_direct_query(client, mock_htcondor):
+    """Test directly querying a daemon (bypassing the collector)"""
+    response = client.get(
+        "/condor_direct_query/schedd", params={"name": "schedd@host"}, headers=AUTH_HEADERS
+    )
+    assert response.status_code == 200
+    assert response.json() == {"MyType": "Machine"}
+
+
+def test_condor_direct_query_bad_type(client, mock_htcondor):
+    """Test that an unknown daemon type returns 400"""
+    response = client.get("/condor_direct_query/bogus", headers=AUTH_HEADERS)
+    assert response.status_code == 400
+
+
+def test_condor_advertise(client, mock_htcondor):
+    """Test advertising classads to the collector"""
+    DummyCollector = mock_htcondor["DummyCollector"]
+    response = client.post(
+        "/condor_advertise",
+        json={
+            "ads": [{"MyType": "Generic", "Name": "custom"}],
+            "command": "UPDATE_AD_GENERIC",
+            "use_tcp": True,
+        },
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json() is True
+    ad_list, command, use_tcp = DummyCollector.advertised
+    assert command == "UPDATE_AD_GENERIC"
+    assert use_tcp is True
+    assert ad_list[0]._data == {"MyType": "Generic", "Name": "custom"}

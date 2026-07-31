@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
@@ -12,6 +12,13 @@ class CondorSubmit(BaseModel):
     count: int = Field(
         1,
         description="Number of processes (procs) to submit for this cluster.",
+    )
+    spool: bool = Field(
+        False,
+        description=(
+            "If true, submit the job(s) on hold so their input files can later "
+            "be uploaded to the schedd's SPOOL directory via /condor_spool."
+        ),
     )
     jobbatchname: Optional[str] = Field(
         None,
@@ -344,6 +351,30 @@ class CondorSubmitResults(BaseModel):
     )
 
 
+class CondorSubmitText(BaseModel):
+    submit_text: str = Field(
+        ...,
+        description=(
+            "A complete job submit description in the condor_submit language, "
+            "including any queue statement."
+        ),
+    )
+    count: int = Field(
+        0,
+        description=(
+            "Number of procs to submit; 0 uses the count from the queue "
+            "statement in the submit text."
+        ),
+    )
+    spool: bool = Field(
+        False,
+        description=(
+            "If true, submit the job(s) on hold so their input files can later "
+            "be uploaded to the schedd's SPOOL directory via /condor_spool."
+        ),
+    )
+
+
 class CondorJobAction(BaseModel):
     job_ids: Optional[List[str]] = Field(
         None,
@@ -418,4 +449,95 @@ class CondorUnexport(BaseModel):
     constraint: Optional[str] = Field(
         None,
         description="ClassAd expression selecting which jobs to unexport.",
+    )
+
+
+class CondorJobSpec(BaseModel):
+    """Select a set of jobs by explicit IDs or by a constraint expression."""
+
+    job_ids: Optional[List[str]] = Field(
+        None,
+        description="Job IDs, e.g. ``['123.0', '123.1']``.  Mutually exclusive with ``constraint``.",
+    )
+    constraint: Optional[str] = Field(
+        None,
+        description="ClassAd expression selecting which jobs to act on.",
+    )
+
+
+class CondorRecAction(BaseModel):
+    """Act on user or project accounting records."""
+
+    spec: Optional[Union[str, List[str]]] = Field(
+        None,
+        description=(
+            "Record name(s): a single name, a list of names, or for updates "
+            "a list of ClassAd-style dicts.  Mutually exclusive with ``constraint``."
+        ),
+    )
+    constraint: Optional[str] = Field(
+        None,
+        description="ClassAd expression selecting which records to act on.",
+    )
+    reason: Optional[str] = Field(
+        None,
+        description="Free-form justification for the action.",
+    )
+
+
+class CondorRecUpdate(BaseModel):
+    """Update user or project accounting records."""
+
+    ads: List[Dict[str, Any]] = Field(
+        ...,
+        description=(
+            "List of ClassAd-style dicts with the new attribute values.  Each "
+            "ad must identify the record(s) to update (e.g. via a Name/User or "
+            "Requirements attribute)."
+        ),
+    )
+
+
+class CondorRefreshGSIProxy(BaseModel):
+    cluster: int = Field(..., description="The job's cluster ID.")
+    proc: int = Field(..., description="The job's proc ID.")
+    proxy_filename: str = Field(
+        ..., description="The name of the file containing the refreshed proxy."
+    )
+    lifetime: int = Field(
+        -1,
+        description=(
+            "Desired lifetime (seconds) of the refreshed proxy.  0 keeps the "
+            "current lifetime; -1 uses DELEGATE_JOB_GSI_CREDENTIALS_LIFETIME."
+        ),
+    )
+
+
+class CondorOCU(BaseModel):
+    """One-Click-University claim request, expressed as a ClassAd."""
+
+    request: Dict[str, Any] = Field(
+        ...,
+        description=(
+            "ClassAd representing the OCU claim request (must contain Owner and "
+            "RequestCpus/RequestMemory; query requests may be empty)."
+        ),
+    )
+
+
+class CondorAdvertise(BaseModel):
+    ads: List[Dict[str, Any]] = Field(
+        ...,
+        description="ClassAd(s) to advertise to the collector.",
+    )
+    command: str = Field(
+        "UPDATE_AD_GENERIC",
+        description=(
+            "The 'advertise command' specifying which kind of ad is being "
+            "added; see the condor_advertise manpage for valid values."
+        ),
+    )
+    use_tcp: bool = Field(
+        True,
+        description="Never set this to false.",
     )
