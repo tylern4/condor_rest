@@ -182,8 +182,6 @@ def require_auth(
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
-app.include_router(router)
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1131,3 +1129,6 @@ def metrics() -> Response:
         content=_format_metrics(),
         media_type="text/plain; version=0.0.4",
     )
+
+
+app.include_router(router)
