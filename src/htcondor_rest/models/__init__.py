@@ -148,6 +148,7 @@ class CondorJob(BaseModel):
     RequestDisk: int | str | None = Field(None, alias="RequestDisk")
     RequestGpus: int | str | None = Field(None, alias="RequestGpus")
     CurrentHosts: int | str | None = Field(None, alias="CurrentHosts")
+    runtime_minutes: int | str | None = Field(None, alias="runtime_minutes")
     ExitBySignal: bool | None = Field(None, alias="ExitBySignal")
     JobStartDate: int | str | None = Field(None, alias="JobStartDate")
     NumCkpts_RAW: int | str | None = Field(None, alias="NumCkpts_RAW")
