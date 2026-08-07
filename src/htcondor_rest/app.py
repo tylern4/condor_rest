@@ -183,9 +183,6 @@ def require_auth(
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
-# NOTE: ``app.include_router(router)`` must run at the end of this module,
-# after every ``@router.*`` decorator has registered its routes.
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
