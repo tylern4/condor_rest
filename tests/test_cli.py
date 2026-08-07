@@ -1,8 +1,9 @@
 import json
 
 import pytest
+import typer
 
-import htcondor_rest.cli as cli
+from htcondor_rest import cli
 
 
 class FakeCondorClient:
@@ -31,7 +32,9 @@ class FakeCondorClient:
         self.calls.append(("get_queue", job_id, constraint, projection, limit))
         return [{"ClusterId": 123, "JobStatus": 1}]
 
-    def get_history(self, job_id=None, constraint=None, projection=None, match=-1, since=None):
+    def get_history(
+        self, job_id=None, constraint=None, projection=None, match=-1, since=None
+    ):
         self.calls.append(("get_history", job_id, constraint, projection, match, since))
         return [{"ClusterId": 123, "JobStatus": 4}]
 
@@ -76,7 +79,9 @@ def test_condor_submit_cli(tmp_path, fake, capsys):
     path = tmp_path / "submit"
     path.write_text("executable = /bin/echo\nqueue 3\n")
     cli.condor_submit_cli(path)
-    assert fake.calls == [("submit_file", "executable = /bin/echo\nqueue 3\n", 0, False)]
+    assert fake.calls == [
+        ("submit_file", "executable = /bin/echo\nqueue 3\n", 0, False)
+    ]
     out = capsys.readouterr().out
     assert json.loads(out) == {"cluster": 123, "num_procs": 3}
 
@@ -93,19 +98,34 @@ def test_condor_submit_uses_url_and_token(tmp_path, fake):
 # condor_q
 # ---------------------------------------------------------------------------
 def test_condor_q_cli(fake, capsys):
-    cli.condor_q_cli(None, constraint=None, projection=None, limit=-1, )
+    cli.condor_q_cli(
+        None,
+        constraint=None,
+        projection=None,
+        limit=-1,
+    )
     assert fake.calls == [("get_queue", None, None, None, -1)]
     out = capsys.readouterr().out
     assert json.loads(out) == [{"ClusterId": 123, "JobStatus": 1}]
 
 
 def test_condor_q_cli_by_cluster(fake):
-    cli.condor_q_cli("123", constraint=None, projection=None, limit=-1, )
+    cli.condor_q_cli(
+        "123",
+        constraint=None,
+        projection=None,
+        limit=-1,
+    )
     assert fake.calls == [("get_queue", 123, None, None, -1)]
 
 
 def test_condor_q_cli_by_proc(fake):
-    cli.condor_q_cli("123.0", constraint=None, projection=None, limit=-1, )
+    cli.condor_q_cli(
+        "123.0",
+        constraint=None,
+        projection=None,
+        limit=-1,
+    )
     assert fake.calls == [
         (
             "get_queue",
@@ -118,7 +138,12 @@ def test_condor_q_cli_by_proc(fake):
 
 
 def test_condor_q_cli_passes_constraint(fake):
-    cli.condor_q_cli(None, constraint='Owner == "bob"', projection="ClusterId", limit=5, )
+    cli.condor_q_cli(
+        None,
+        constraint='Owner == "bob"',
+        projection="ClusterId",
+        limit=5,
+    )
     assert fake.calls == [("get_queue", None, 'Owner == "bob"', "ClusterId", 5)]
 
 
@@ -126,13 +151,19 @@ def test_condor_q_cli_passes_constraint(fake):
 # condor_rm
 # ---------------------------------------------------------------------------
 def test_condor_rm_cli(fake, capsys):
-    cli.condor_rm_cli("123.0", reason=None, )
+    cli.condor_rm_cli(
+        "123.0",
+        reason=None,
+    )
     assert fake.calls == [("remove", ["123.0"], None, None)]
     assert json.loads(capsys.readouterr().out) == {"TotalSuccess": 1}
 
 
 def test_condor_rm_cli_with_reason(fake):
-    cli.condor_rm_cli("123", reason="no longer needed", )
+    cli.condor_rm_cli(
+        "123",
+        reason="no longer needed",
+    )
     assert fake.calls == [("remove", ["123"], None, "no longer needed")]
 
 
@@ -140,40 +171,72 @@ def test_condor_rm_cli_with_reason(fake):
 # condor_history / condor_status / condor_hold / condor_release
 # ---------------------------------------------------------------------------
 def test_condor_history_cli(fake):
-    cli.condor_history_cli(None, constraint=None, projection=None, match=-1, since=None, )
+    cli.condor_history_cli(
+        None,
+        constraint=None,
+        projection=None,
+        match=-1,
+        since=None,
+    )
     assert fake.calls == [("get_history", None, None, None, -1, None)]
 
 
 def test_condor_history_cli_by_proc(fake):
-    cli.condor_history_cli("123.0", constraint=None, projection=None, match=-1, since=None, )
+    cli.condor_history_cli(
+        "123.0",
+        constraint=None,
+        projection=None,
+        match=-1,
+        since=None,
+    )
     assert fake.calls == [
         ("get_history", None, "(ClusterId == 123 && ProcID == 0)", None, -1, None)
     ]
 
 
 def test_condor_status_cli(fake, capsys):
-    cli.condor_status_cli(None, ad_type="any", constraint=None, projection=None, )
+    cli.condor_status_cli(
+        None,
+        ad_type="any",
+        constraint=None,
+        projection=None,
+    )
     assert fake.calls == [("get_status", "any", None, None)]
     assert json.loads(capsys.readouterr().out)[0]["Name"] == "slot1@host"
 
 
 def test_condor_status_cli_by_name(fake):
-    cli.condor_status_cli("slot1@host", ad_type="slot", constraint=None, projection=None, )
-    assert fake.calls == [
-        ("get_status_by_name", "slot1@host", "slot", None, None)
-    ]
+    cli.condor_status_cli(
+        "slot1@host",
+        ad_type="slot",
+        constraint=None,
+        projection=None,
+    )
+    assert fake.calls == [("get_status_by_name", "slot1@host", "slot", None, None)]
 
 
 def test_condor_hold_cli(fake):
-    cli.condor_hold_cli("123.0", constraint=None, reason="testing", )
+    cli.condor_hold_cli(
+        "123.0",
+        constraint=None,
+        reason="testing",
+    )
     assert fake.calls == [("hold", ["123.0"], None, "testing")]
 
 
 def test_condor_release_cli_by_constraint(fake):
-    cli.condor_release_cli(None, constraint='Owner == "bob"', reason=None, )
+    cli.condor_release_cli(
+        None,
+        constraint='Owner == "bob"',
+        reason=None,
+    )
     assert fake.calls == [("release", None, 'Owner == "bob"', None)]
 
 
 def test_condor_hold_cli_requires_spec(fake):
-    with pytest.raises(Exception):
-        cli.condor_hold_cli(None, constraint=None, reason=None, )
+    with pytest.raises(typer.BadParameter):
+        cli.condor_hold_cli(
+            None,
+            constraint=None,
+            reason=None,
+        )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Self
 
 import httpx
 from loguru import logger
@@ -24,7 +24,7 @@ class CondorClient:
         base_url: str = CONDOR_URL,
         token: str = CONDOR_PASS,
         timeout: float = 60.0,
-        transport: Optional[httpx.BaseTransport] = None,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._client = httpx.Client(
             base_url=base_url,
@@ -34,7 +34,7 @@ class CondorClient:
         )
         logger.info(f"Connected to htcondor-rest API at {base_url}")
 
-    def __enter__(self) -> "CondorClient":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -72,14 +72,14 @@ class CondorClient:
     # ------------------------------------------------------------------
     def get_queue(
         self,
-        job_id: Optional[int] = None,
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
+        job_id: int | None = None,
+        constraint: str | None = None,
+        projection: str | None = None,
         limit: int = -1,
     ) -> Any:
         if job_id is not None:
             return self._request("GET", f"/condor_q/{job_id}")
-        params: Dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -88,11 +88,11 @@ class CondorClient:
 
     def get_user_ads(
         self,
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
+        constraint: str | None = None,
+        projection: str | None = None,
         limit: int = -1,
-    ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"limit": limit}
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -101,11 +101,11 @@ class CondorClient:
 
     def get_project_ads(
         self,
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
+        constraint: str | None = None,
+        projection: str | None = None,
         limit: int = -1,
-    ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"limit": limit}
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -117,15 +117,15 @@ class CondorClient:
     # ------------------------------------------------------------------
     def get_history(
         self,
-        job_id: Optional[int] = None,
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
+        job_id: int | None = None,
+        constraint: str | None = None,
+        projection: str | None = None,
         match: int = -1,
-        since: Optional[str] = None,
+        since: str | None = None,
     ) -> Any:
         if job_id is not None:
             return self._request("GET", f"/condor_history/{job_id}")
-        params: Dict[str, Any] = {"match": match}
+        params: dict[str, Any] = {"match": match}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -136,12 +136,12 @@ class CondorClient:
 
     def get_epoch_history(
         self,
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
+        constraint: str | None = None,
+        projection: str | None = None,
         match: int = -1,
-        since: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"match": match}
+        since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"match": match}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -152,12 +152,12 @@ class CondorClient:
 
     def get_daemon_history(
         self,
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
+        constraint: str | None = None,
+        projection: str | None = None,
         match: int = -1,
-        since: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"match": match}
+        since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"match": match}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -169,10 +169,12 @@ class CondorClient:
     # ------------------------------------------------------------------
     # Submission
     # ------------------------------------------------------------------
-    def submit(self, job: Dict[str, Any]) -> Dict[str, Any]:
+    def submit(self, job: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/condor_submit", json=job)
 
-    def submit_file(self, submit_text: str, count: int = 0, spool: bool = False) -> Dict[str, Any]:
+    def submit_file(
+        self, submit_text: str, count: int = 0, spool: bool = False
+    ) -> dict[str, Any]:
         """Submit a job described by raw condor_submit-language text."""
         return self._request(
             "POST",
@@ -186,14 +188,14 @@ class CondorClient:
     def _apply_action(
         self,
         action: str,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         if job_id is not None:
             return self._request("POST", f"/{action}/{job_id}")
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if job_ids is not None:
             body["job_ids"] = job_ids
         if constraint is not None:
@@ -204,90 +206,122 @@ class CondorClient:
 
     def hold(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_hold", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_hold",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def release(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_release", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_release",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def suspend(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_suspend", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_suspend",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def resume(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_continue", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_continue",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def remove(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_rm", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_rm",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def remove_x(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_rmx", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_rmx",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def vacate(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_vacate", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_vacate",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def vacate_fast(
         self,
-        job_id: Optional[int] = None,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_id: int | None = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._apply_action(
-            "condor_vacate_fast", job_id=job_id, job_ids=job_ids, constraint=constraint, reason=reason
+            "condor_vacate_fast",
+            job_id=job_id,
+            job_ids=job_ids,
+            constraint=constraint,
+            reason=reason,
         )
 
     def delete_job(self, job_id: int) -> bool:
@@ -296,18 +330,18 @@ class CondorClient:
     # ------------------------------------------------------------------
     # Schedd: file transfer (spool / retrieve)
     # ------------------------------------------------------------------
-    def spool(self) -> Dict[str, Any]:
+    def spool(self) -> dict[str, Any]:
         """Upload input files of the most recent ``spool=True`` submit."""
         return self._request("POST", "/condor_spool")
 
     def retrieve(
         self,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
     ) -> bool:
         if job_ids is None and constraint is None:
             raise ValueError("Must provide job_ids or constraint")
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if job_ids is not None:
             body["job_ids"] = job_ids
         if constraint is not None:
@@ -336,10 +370,10 @@ class CondorClient:
 
     def get_claims(
         self,
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {}
+        constraint: str | None = None,
+        projection: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -349,13 +383,13 @@ class CondorClient:
     # ------------------------------------------------------------------
     # Schedd: one-click university (OCU) claims
     # ------------------------------------------------------------------
-    def create_ocu(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def create_ocu(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/condor_create_ocu", json={"request": request})
 
-    def remove_ocu(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def remove_ocu(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/condor_remove_ocu", json={"request": request})
 
-    def query_ocu(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def query_ocu(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/condor_query_ocu", json={"request": request})
 
     # ------------------------------------------------------------------
@@ -364,15 +398,15 @@ class CondorClient:
     def _rec_action(
         self,
         route: str,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         if spec is not None and constraint is not None:
             raise ValueError("Provide either spec or constraint, not both")
         if spec is None and constraint is None:
             raise ValueError("Must provide spec or constraint")
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if spec is not None:
             body["spec"] = spec
         if constraint is not None:
@@ -383,76 +417,76 @@ class CondorClient:
 
     def add_user_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action("add_user_rec", spec=spec, constraint=constraint)
 
     def enable_user_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action("enable_user_rec", spec=spec, constraint=constraint)
 
     def disable_user_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action(
             "disable_user_rec", spec=spec, constraint=constraint, reason=reason
         )
 
     def remove_user_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action(
             "remove_user_rec", spec=spec, constraint=constraint, reason=reason
         )
 
-    def update_user_rec(self, ads: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def update_user_rec(self, ads: list[dict[str, Any]]) -> dict[str, Any]:
         return self._request("POST", "/condor_update_user_rec", json={"ads": ads})
 
     def add_project_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action("add_project_rec", spec=spec, constraint=constraint)
 
     def enable_project_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action("enable_project_rec", spec=spec, constraint=constraint)
 
     def disable_project_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action(
             "disable_project_rec", spec=spec, constraint=constraint, reason=reason
         )
 
     def remove_project_rec(
         self,
-        spec: Optional[Union[str, List[str]]] = None,
-        constraint: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        spec: str | list[str] | None = None,
+        constraint: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._rec_action(
             "remove_project_rec", spec=spec, constraint=constraint, reason=reason
         )
 
-    def update_project_rec(self, ads: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def update_project_rec(self, ads: list[dict[str, Any]]) -> dict[str, Any]:
         return self._request("POST", "/condor_update_project_rec", json={"ads": ads})
 
     # ------------------------------------------------------------------
@@ -462,12 +496,12 @@ class CondorClient:
         self,
         attr: str,
         value: str,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
     ) -> int:
         if job_ids is None and constraint is None:
             raise ValueError("Must provide job_ids or constraint")
-        body: Dict[str, Any] = {"attr": attr, "value": value}
+        body: dict[str, Any] = {"attr": attr, "value": value}
         if job_ids is not None:
             body["job_ids"] = job_ids
         if constraint is not None:
@@ -481,31 +515,36 @@ class CondorClient:
         self,
         export_dir: str,
         new_spool_dir: str,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+    ) -> dict[str, Any]:
         if job_ids is None and constraint is None:
             raise ValueError("Must provide job_ids or constraint")
-        body: Dict[str, Any] = {"export_dir": export_dir, "new_spool_dir": new_spool_dir}
+        body: dict[str, Any] = {
+            "export_dir": export_dir,
+            "new_spool_dir": new_spool_dir,
+        }
         if job_ids is not None:
             body["job_ids"] = job_ids
         if constraint is not None:
             body["constraint"] = constraint
         return self._request("POST", "/condor_export_jobs", json=body)
 
-    def import_exported_job_results(self, import_dir: str) -> Dict[str, Any]:
+    def import_exported_job_results(self, import_dir: str) -> dict[str, Any]:
         return self._request(
-            "POST", "/condor_import_exported_job_results", json={"import_dir": import_dir}
+            "POST",
+            "/condor_import_exported_job_results",
+            json={"import_dir": import_dir},
         )
 
     def unexport_jobs(
         self,
-        job_ids: Optional[List[str]] = None,
-        constraint: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        job_ids: list[str] | None = None,
+        constraint: str | None = None,
+    ) -> dict[str, Any]:
         if job_ids is None and constraint is None:
             raise ValueError("Must provide job_ids or constraint")
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if job_ids is not None:
             body["job_ids"] = job_ids
         if constraint is not None:
@@ -518,10 +557,10 @@ class CondorClient:
     def get_status(
         self,
         ad_type: str = "any",
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"ad_type": ad_type}
+        constraint: str | None = None,
+        projection: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"ad_type": ad_type}
         if constraint:
             params["constraint"] = constraint
         if projection:
@@ -532,17 +571,17 @@ class CondorClient:
         self,
         name: str,
         ad_type: str = "any",
-        constraint: Optional[str] = None,
-        projection: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {"ad_type": ad_type}
+        constraint: str | None = None,
+        projection: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"ad_type": ad_type}
         if constraint:
             params["constraint"] = constraint
         if projection:
             params["projection"] = projection
         return self._request("GET", f"/condor_status/{name}", params=params)
 
-    def get_nodes(self) -> List[Dict[str, Any]]:
+    def get_nodes(self) -> list[dict[str, Any]]:
         return self._request("GET", "/condor_nodes")
 
     # ------------------------------------------------------------------
@@ -551,24 +590,24 @@ class CondorClient:
     def locate(
         self,
         daemon_type: str,
-        name: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {}
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
         if name:
             params["name"] = name
         return self._request("GET", f"/condor_locate/{daemon_type}", params=params)
 
-    def locate_all(self, daemon_type: str) -> List[Dict[str, Any]]:
+    def locate_all(self, daemon_type: str) -> list[dict[str, Any]]:
         return self._request("GET", f"/condor_locate_all/{daemon_type}")
 
     def direct_query(
         self,
         daemon_type: str,
-        name: Optional[str] = None,
-        projection: Optional[str] = None,
-        statistics: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {}
+        name: str | None = None,
+        projection: str | None = None,
+        statistics: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
         if name:
             params["name"] = name
         if projection:
@@ -581,7 +620,7 @@ class CondorClient:
 
     def advertise(
         self,
-        ads: List[Dict[str, Any]],
+        ads: list[dict[str, Any]],
         command: str = "UPDATE_AD_GENERIC",
         use_tcp: bool = True,
     ) -> bool:
@@ -596,7 +635,7 @@ class CondorClient:
     # ------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------
-    def get_config(self) -> Dict[str, str]:
+    def get_config(self) -> dict[str, str]:
         return self._request("GET", "/condor_config")
 
     def get_config_attribute(self, attribute: str) -> str:
@@ -605,10 +644,10 @@ class CondorClient:
     # ------------------------------------------------------------------
     # Negotiator: user priorities
     # ------------------------------------------------------------------
-    def get_userprio(self) -> List[Dict[str, Any]]:
+    def get_userprio(self) -> list[dict[str, Any]]:
         return self._request("GET", "/condor_userprio")
 
-    def get_userprio_user(self, user: str) -> List[Dict[str, Any]]:
+    def get_userprio_user(self, user: str) -> list[dict[str, Any]]:
         return self._request("GET", f"/condor_userprio/{user}")
 
     # ------------------------------------------------------------------

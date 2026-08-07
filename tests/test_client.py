@@ -86,7 +86,9 @@ def test_submit_file(condor_client):
 
 def test_get_queue_builds_query_params(condor_client):
     client, calls = condor_client
-    client.get_queue(constraint='Owner == "bob"', projection="ClusterId,JobStatus", limit=10)
+    client.get_queue(
+        constraint='Owner == "bob"', projection="ClusterId,JobStatus", limit=10
+    )
     request = calls[-1]
     assert request.url.path == "/condor_q"
     assert request.url.params["constraint"] == 'Owner == "bob"'
@@ -146,7 +148,11 @@ def test_edit(condor_client):
     client, calls = condor_client
     result = client.edit(attr="JobPriority", value="10", job_ids=["1.0"])
     assert result == 1
-    assert json.loads(calls[-1].content) == {"attr": "JobPriority", "value": "10", "job_ids": ["1.0"]}
+    assert json.loads(calls[-1].content) == {
+        "attr": "JobPriority",
+        "value": "10",
+        "job_ids": ["1.0"],
+    }
 
 
 def test_metrics_returns_text(condor_client):

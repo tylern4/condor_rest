@@ -1,6 +1,6 @@
-from .client import CondorClient, CONDOR_URL, CONDOR_PASS
+from .client import CONDOR_PASS, CONDOR_URL, CondorClient
 
-__all__ = ["CondorClient", "CONDOR_URL", "CONDOR_PASS"]
+__all__ = ["CONDOR_PASS", "CONDOR_URL", "CondorClient"]
 
 
 def main(): ...

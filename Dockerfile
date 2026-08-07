@@ -12,9 +12,10 @@ COPY htcondor_configs/supervisord.conf /etc/supervisord.conf
 WORKDIR /app
 RUN chown -R submituser:submituser /app
 
+# hadolint ignore=DL3066  # submituser is a well-known base-image user
 USER submituser
-COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-install-project
+COPY pyproject.toml README.md ./
+RUN uv sync --no-install-project
 
 COPY --chown=submituser:submituser src /app/
-RUN uv sync --frozen
+RUN uv sync

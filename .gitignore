@@ -8,6 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# uv.lock is intentionally not committed; builds are reproducible via Docker.
+uv.lock
 # Ignore password file
 .passwords
 scratch
