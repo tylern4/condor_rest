@@ -27,9 +27,9 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-install-project
+COPY pyproject.toml README.md ./
+RUN uv sync --no-install-project
 COPY htcondor_configs/start.sh /app/start.sh
 COPY src /app/
-RUN uv sync --frozen
+RUN uv sync
 RUN chmod a+x /root && chmod -R a+rwx /app/.venv /root/.local

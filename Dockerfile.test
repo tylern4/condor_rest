@@ -8,11 +8,11 @@ WORKDIR /app
 # Install dependencies before copying the sources so this layer is cached
 # unless the dependency manifest changes. The project package is skipped on
 # the first sync because `src/` is not present yet.
-COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --all-extras --dev --no-install-project
+COPY pyproject.toml README.md ./
+RUN uv sync --all-extras --dev --no-install-project
 
 COPY src /app/src
 COPY tests /app/tests
-RUN uv sync --frozen --all-extras --dev
+RUN uv sync --all-extras --dev
 
 CMD ["uv", "run", "pytest", "-q"]

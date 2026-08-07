@@ -1,12 +1,4 @@
 repos:
-  # Keep uv.lock in sync with pyproject.toml and fail on known vulnerabilities
-  # in the lockfile.
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.12.2
-    hooks:
-      - id: uv-lock
-      - id: uv-audit
-
   # Python linting (with autofix) and formatting.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.2

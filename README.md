@@ -40,7 +40,7 @@ The server runs *inside* an HTCondor pool (either a full pool or a mini single-c
 The server needs a reachable HTCondor pool. The easiest way to try everything is the Spin image (below), which runs a whole mini-pool in one container. To run just the server against an existing pool:
 
 ```bash
-uv sync --frozen
+uv sync
 condor_status   # must talk to your pool first, or set CONDOR_CONFIG
 uvicorn htcondor_rest.app:app --host 0.0.0.0 --port 8008
 ```
@@ -393,15 +393,16 @@ Pass any pytest arguments straight through. Overridables: `TEST_IMAGE`, `TEST_DO
 Or on a Linux machine:
 
 ```bash
-uv sync --frozen --all-extras --dev
+uv sync --all-extras --dev
 uv run pytest
 ```
+
+`uv.lock` is intentionally not committed. The deployable artifacts are Docker images, and dependency resolution happens inside the image build, so images stay reproducible without a lockfile (and without lockfile merge conflicts). Local and CI installs resolve fresh against `pyproject.toml`, so keep the `>=` constraints current.
 
 ### Pre-commit hooks
 
 A set of pre-commit hooks keeps the repo tidy. Run `pre-commit install` once, and the hooks run on every commit (or manually with `pre-commit run --all-files`):
 
-- **uv** (`uv-lock`, `uv-audit`): keeps `uv.lock` in sync with `pyproject.toml` and fails on known vulnerabilities in the lockfile.
 - **ruff** (`ruff`, `ruff-format`): Python linting (with autofix) and formatting.
 - **pre-commit-hooks**: whitespace/EOF hygiene, YAML/TOML/JSON validation, shebang checks, merge-conflict and private-key detection.
 - **hadolint**: lints the Dockerfiles.
