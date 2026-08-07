@@ -4,33 +4,34 @@ import os
 import secrets
 import threading
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Annotated, Any, AsyncIterator, Dict, List, Optional
-
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from loguru import logger
-from .models import (
-    CondorStatus,
-    CondorSubmit,
-    CondorJob,
-    CondorSubmitResults,
-    CondorSubmitText,
-    CondorJobAction,
-    CondorEdit,
-    CondorExport,
-    CondorImport,
-    CondorUnexport,
-    CondorJobSpec,
-    CondorRecAction,
-    CondorRecUpdate,
-    CondorRefreshGSIProxy,
-    CondorOCU,
-    CondorAdvertise,
-)
+from typing import Annotated, Any
 
 import htcondor2 as htcondor
 from classad2 import ClassAd, ExprTree
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from loguru import logger
+
+from .models import (
+    CondorAdvertise,
+    CondorEdit,
+    CondorExport,
+    CondorImport,
+    CondorJob,
+    CondorJobAction,
+    CondorJobSpec,
+    CondorOCU,
+    CondorRecAction,
+    CondorRecUpdate,
+    CondorRefreshGSIProxy,
+    CondorStatus,
+    CondorSubmit,
+    CondorSubmitResults,
+    CondorSubmitText,
+    CondorUnexport,
+)
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics
@@ -52,7 +53,7 @@ HISTORY_WINDOWS = {"1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400}
 _metrics_lock = threading.Lock()
 
 
-def _new_metrics() -> Dict[str, Any]:
+def _new_metrics() -> dict[str, Any]:
     windows = ["all", *HISTORY_WINDOWS]
     return {
         "up": 0,
@@ -182,7 +183,8 @@ def require_auth(
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
-app.include_router(router)
+# NOTE: ``app.include_router(router)`` must run at the end of this module,
+# after every ``@router.*`` decorator has registered its routes.
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -235,17 +237,17 @@ JOB_ACTIONS = {
 }
 
 
-def _projection_list(projection: Optional[str]) -> List[str]:
+def _projection_list(projection: str | None) -> list[str]:
     if projection is None or projection == "":
         return []
     return [p.strip() for p in projection.split(",")]
 
 
-def _ad_to_json(ad) -> Dict[str, Any]:
+def _ad_to_json(ad) -> dict[str, Any]:
     return json.loads(ad.formatJson())
 
 
-def _ads_to_json(ads) -> List[Dict[str, Any]]:
+def _ads_to_json(ads) -> list[dict[str, Any]]:
     result = []
     for ad in ads:
         try:
@@ -253,7 +255,7 @@ def _ads_to_json(ads) -> List[Dict[str, Any]]:
         except Exception as exp:
             logger.exception(f"Could not convert ad data {exp}")
             logger.error(f"Ad data looks like: {ad}")
-            raise HTTPException(status_code=500, detail=str(exp))
+            raise HTTPException(status_code=500, detail=str(exp)) from exp
     return result
 
 
@@ -272,9 +274,9 @@ async def read_root():
 @router.get("/condor_q")
 async def jobs(
     constraint: str = "True",
-    projection: Optional[str] = None,
+    projection: str | None = None,
     limit: int = -1,
-) -> List[CondorJob]:
+) -> list[CondorJob]:
     logger.info("Getting condor_q")
     schedd = htcondor.Schedd()
     jobs = []
@@ -287,7 +289,7 @@ async def jobs(
         except Exception as exp:
             logger.exception(f"Could not convert job data {exp}")
             logger.error(f"Job data looks like: {q}")
-            raise HTTPException(500, f"{exp}")
+            raise HTTPException(500, f"{exp}") from exp
 
     logger.info(f"Found {len(jobs)} jobs")
     return jobs
@@ -304,7 +306,7 @@ async def job(
         q: ClassAd = schedd.query(constraint=f"ClusterId=={job_id}")
     except Exception as exp:
         logger.exception(f"Could not get job data {exp}")
-        raise HTTPException(status_code=500, detail="Error getting job data")
+        raise HTTPException(status_code=500, detail="Error getting job data") from exp
     # If no job is found, raise a 404 error.
     if len(q) == 0:
         raise HTTPException(
@@ -318,16 +320,18 @@ async def job(
     except Exception as exp:
         logger.exception(f"Could not convert job data {exp}")
         logger.error(f"Job data looks like: {q}")
-        raise HTTPException(status_code=500, detail="Error converting job data")
+        raise HTTPException(
+            status_code=500, detail="Error converting job data"
+        ) from exp
     return job
 
 
 @router.get("/condor_q_user")
 async def user_ads(
     constraint: str = "",
-    projection: Optional[str] = None,
+    projection: str | None = None,
     limit: int = -1,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     logger.info("Getting condor_q_user")
     schedd = htcondor.Schedd()
     return _ads_to_json(
@@ -340,9 +344,9 @@ async def user_ads(
 @router.get("/condor_q_project")
 async def project_ads(
     constraint: str = "",
-    projection: Optional[str] = None,
+    projection: str | None = None,
     limit: int = -1,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     logger.info("Getting condor_q_project")
     schedd = htcondor.Schedd()
     return _ads_to_json(
@@ -357,16 +361,19 @@ async def project_ads(
 # ---------------------------------------------------------------------------
 @router.get("/condor_history")
 async def histories(
-    constraint: Optional[str] = None,
-    projection: Optional[str] = None,
+    constraint: str | None = None,
+    projection: str | None = None,
     match: int = -1,
-    since: Optional[str] = None,
-) -> List[CondorJob]:
+    since: str | None = None,
+) -> list[CondorJob]:
     logger.info("Getting condor_history")
     schedd = htcondor.Schedd()
     jobs = []
     for h in schedd.history(
-        constraint=constraint, projection=_projection_list(projection), match=match, since=since
+        constraint=constraint,
+        projection=_projection_list(projection),
+        match=match,
+        since=since,
     ):
         try:
             job = CondorJob(**json.loads(h.formatJson()))
@@ -374,7 +381,7 @@ async def histories(
         except Exception as exp:
             logger.exception(f"Could not convert job data {exp}")
             logger.error(f"Job data looks like: {h}")
-            raise HTTPException(500, f"{exp}")
+            raise HTTPException(500, f"{exp}") from exp
     logger.info(f"Found {len(jobs)} jobs")
     return jobs
 
@@ -399,39 +406,47 @@ async def history(
     except Exception as exp:
         logger.exception(f"Could not convert job data {exp}")
         logger.error(f"Job data looks like: {h}")
-        raise HTTPException(status_code=500, detail="Error converting job data")
+        raise HTTPException(
+            status_code=500, detail="Error converting job data"
+        ) from exp
     return job
 
 
 @router.get("/condor_epoch_history")
 async def epoch_history(
-    constraint: Optional[str] = None,
-    projection: Optional[str] = None,
+    constraint: str | None = None,
+    projection: str | None = None,
     match: int = -1,
-    since: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    since: str | None = None,
+) -> list[dict[str, Any]]:
     logger.info("Getting condor_epoch_history")
     schedd = htcondor.Schedd()
     return _ads_to_json(
         schedd.jobEpochHistory(
-            constraint=constraint, projection=_projection_list(projection), match=match, since=since
+            constraint=constraint,
+            projection=_projection_list(projection),
+            match=match,
+            since=since,
         )
     )
 
 
 @router.get("/condor_daemon_history")
 async def daemon_history(
-    constraint: Optional[str] = None,
-    projection: Optional[str] = None,
+    constraint: str | None = None,
+    projection: str | None = None,
     match: int = -1,
-    since: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    since: str | None = None,
+) -> list[dict[str, Any]]:
     logger.info("Getting condor_daemon_history")
     schedd = htcondor.Schedd()
     since_expr = ExprTree(since) if since else None
     return _ads_to_json(
         schedd.daemonHistory(
-            constraint=constraint, projection=_projection_list(projection), match=match, since=since_expr
+            constraint=constraint,
+            projection=_projection_list(projection),
+            match=match,
+            since=since_expr,
         )
     )
 
@@ -444,7 +459,7 @@ async def daemon_history(
 # the result object from the original submit, which cannot cross process or
 # request boundaries any other way).
 _spool_lock = threading.Lock()
-_spooled_submit: Optional[Any] = None
+_spooled_submit: Any | None = None
 
 
 @router.post("/condor_submit")
@@ -464,7 +479,7 @@ async def submit(
         logger.info(f"Submitting new job {submit_result.cluster()}")
     except Exception as exp:
         logger.debug(f"Job submission failed {exp}")
-        raise HTTPException(500, f"{exp}")
+        raise HTTPException(500, f"{exp}") from exp
 
     return _submit_response(submit_result, job, spool_flag)
 
@@ -484,7 +499,7 @@ async def submit_file(
         job = htcondor.Submit(body.submit_text)
     except Exception as exp:
         logger.exception(f"Could not parse submit text {exp}")
-        raise HTTPException(status_code=400, detail=str(exp))
+        raise HTTPException(status_code=400, detail=str(exp)) from exp
     logger.debug(f"{job}")
     schedd = htcondor.Schedd()
     try:
@@ -492,12 +507,14 @@ async def submit_file(
         logger.info(f"Submitting new job {submit_result.cluster()}")
     except Exception as exp:
         logger.debug(f"Job submission failed {exp}")
-        raise HTTPException(500, f"{exp}")
+        raise HTTPException(500, f"{exp}") from exp
 
     return _submit_response(submit_result, job, body.spool)
 
 
-def _submit_response(submit_result, job, spool_flag: bool = False) -> CondorSubmitResults:
+def _submit_response(
+    submit_result, job, spool_flag: bool = False
+) -> CondorSubmitResults:
     """Build the standard submit response, keeping the spooled result for later upload."""
     if spool_flag:
         global _spooled_submit
@@ -521,10 +538,10 @@ def _submit_response(submit_result, job, spool_flag: bool = False) -> CondorSubm
 # ---------------------------------------------------------------------------
 def _job_action(
     action,
-    job_ids: Optional[List[str]] = None,
-    constraint: Optional[str] = None,
-    reason: Optional[str] = None,
-) -> Dict[str, Any]:
+    job_ids: list[str] | None = None,
+    constraint: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
     if job_ids is None and constraint is None:
         raise HTTPException(
             status_code=400, detail="Must provide job_ids or constraint"
@@ -534,7 +551,7 @@ def _job_action(
         result = htcondor.Schedd().act(action, spec, reason=reason)
     except Exception as exp:
         logger.exception(f"Job action {action} failed: {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     if result is None:
         return {}
     return json.loads(result.formatJson())
@@ -544,9 +561,9 @@ def _register_job_action(route: str, action) -> None:
     """Register a POST endpoint (and a ``/{job_id}`` variant) for ``action``."""
 
     async def condor_job_action(
-        job_id: Optional[str] = None,
-        body: Optional[CondorJobAction] = None,
-    ) -> Dict[str, Any]:
+        job_id: str | None = None,
+        body: CondorJobAction | None = None,
+    ) -> dict[str, Any]:
         logger.info(f"Applying {action.name} action")
         if job_id is not None:
             job_ids = [job_id]
@@ -560,7 +577,9 @@ def _register_job_action(route: str, action) -> None:
                 detail="Provide a job_id in the path or a CondorJobAction body",
             )
         reason = body.reason if body is not None else None
-        return _job_action(action, job_ids=job_ids, constraint=constraint, reason=reason)
+        return _job_action(
+            action, job_ids=job_ids, constraint=constraint, reason=reason
+        )
 
     router.add_api_route(
         f"/{route}/{{job_id}}",
@@ -597,7 +616,7 @@ async def condor_rm(
         return True
     except Exception as exp:
         logger.debug(f"Job removal failed {exp}")
-        raise HTTPException(500, f"{exp}")
+        raise HTTPException(500, f"{exp}") from exp
 
 
 # ---------------------------------------------------------------------------
@@ -617,25 +636,24 @@ async def condor_edit(
         return htcondor.Schedd().edit(spec, body.attr, body.value)
     except Exception as exp:
         logger.exception(f"Could not edit job data {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
 
 
 @router.post("/condor_reschedule")
-async def condor_reschedule(
-) -> bool:
+async def condor_reschedule() -> bool:
     logger.info("Requesting reschedule")
     try:
         htcondor.Schedd().reschedule()
     except Exception as exp:
         logger.exception(f"Could not reschedule {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return True
 
 
 @router.post("/condor_export_jobs")
 async def condor_export_jobs(
     body: CondorExport,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if body.job_ids is None and body.constraint is None:
         raise HTTPException(
             status_code=400, detail="Must provide job_ids or constraint"
@@ -643,30 +661,32 @@ async def condor_export_jobs(
     spec = body.job_ids if body.job_ids is not None else body.constraint
     logger.info(f"Exporting jobs matching {spec}")
     try:
-        result = htcondor.Schedd().export_jobs(spec, body.export_dir, body.new_spool_dir)
+        result = htcondor.Schedd().export_jobs(
+            spec, body.export_dir, body.new_spool_dir
+        )
     except Exception as exp:
         logger.exception(f"Could not export jobs {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return json.loads(result.formatJson())
 
 
 @router.post("/condor_import_exported_job_results")
 async def condor_import_exported_job_results(
     body: CondorImport,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     logger.info(f"Importing exported job results from {body.import_dir}")
     try:
         result = htcondor.Schedd().import_exported_job_results(body.import_dir)
     except Exception as exp:
         logger.exception(f"Could not import exported job results {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return json.loads(result.formatJson())
 
 
 @router.post("/condor_unexport_jobs")
 async def condor_unexport_jobs(
     body: CondorUnexport,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if body.job_ids is None and body.constraint is None:
         raise HTTPException(
             status_code=400, detail="Must provide job_ids or constraint"
@@ -677,7 +697,7 @@ async def condor_unexport_jobs(
         result = htcondor.Schedd().unexport_jobs(spec)
     except Exception as exp:
         logger.exception(f"Could not unexport jobs {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return json.loads(result.formatJson())
 
 
@@ -685,9 +705,8 @@ async def condor_unexport_jobs(
 # Schedd: file transfer (spool / retrieve)
 # ---------------------------------------------------------------------------
 @router.post("/condor_spool")
-async def condor_spool() -> Dict[str, Any]:
+async def condor_spool() -> dict[str, Any]:
     """Upload the input files of the most recent ``spool=True`` submit."""
-    global _spooled_submit
     with _spool_lock:
         submit_result = _spooled_submit
     if submit_result is None:
@@ -700,7 +719,7 @@ async def condor_spool() -> Dict[str, Any]:
         htcondor.Schedd().spool(submit_result)
     except Exception as exp:
         logger.exception(f"Could not spool job input files {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return {"cluster": submit_result.cluster()}
 
 
@@ -718,7 +737,7 @@ async def condor_retrieve(
         htcondor.Schedd().retrieve(spec)
     except Exception as exp:
         logger.exception(f"Could not retrieve job output {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return True
 
 
@@ -736,14 +755,14 @@ async def condor_refresh_gsi_proxy(
         )
     except Exception as exp:
         logger.exception(f"Could not refresh GSI proxy {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
 
 
 @router.get("/condor_claims")
 async def condor_claims(
-    constraint: Optional[str] = None,
-    projection: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    constraint: str | None = None,
+    projection: str | None = None,
+) -> list[dict[str, Any]]:
     logger.info("Getting condor_claims")
     schedd = htcondor.Schedd()
     return _ads_to_json(
@@ -759,39 +778,39 @@ async def condor_claims(
 @router.post("/condor_create_ocu")
 async def condor_create_ocu(
     body: CondorOCU,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     logger.info("Creating OCU claim")
     try:
         result = htcondor.Schedd().create_ocu(ClassAd(body.request))
     except Exception as exp:
         logger.exception(f"Could not create OCU claim {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return _ad_to_json(result)
 
 
 @router.post("/condor_remove_ocu")
 async def condor_remove_ocu(
     body: CondorOCU,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     logger.info("Removing OCU claim")
     try:
         result = htcondor.Schedd().remove_ocu(ClassAd(body.request))
     except Exception as exp:
         logger.exception(f"Could not remove OCU claim {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return _ad_to_json(result)
 
 
 @router.post("/condor_query_ocu")
 async def condor_query_ocu(
     body: CondorOCU,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     logger.info("Querying OCU claims")
     try:
         result = htcondor.Schedd().query_ocu(ClassAd(body.request))
     except Exception as exp:
         logger.exception(f"Could not query OCU claims {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return _ad_to_json(result)
 
 
@@ -811,11 +830,11 @@ def _rec_spec(body: CondorRecAction) -> Any:
     raise HTTPException(status_code=400, detail="Must provide spec or constraint")
 
 
-def _rec_ads(ads: List[Dict[str, Any]]) -> List[ClassAd]:
+def _rec_ads(ads: list[dict[str, Any]]) -> list[ClassAd]:
     return [ClassAd(ad) for ad in ads]
 
 
-def _rec_result(result) -> Dict[str, Any]:
+def _rec_result(result) -> dict[str, Any]:
     if result is None:
         return {}
     return json.loads(result.formatJson())
@@ -824,17 +843,17 @@ def _rec_result(result) -> Dict[str, Any]:
 def _register_rec_actions(route: str, method: str) -> None:
     """Register a POST endpoint acting on user (or project) records by name."""
 
-    async def rec_action(body: CondorRecAction) -> Dict[str, Any]:
+    async def rec_action(body: CondorRecAction) -> dict[str, Any]:
         logger.info(f"Applying {method} to accounting records")
         spec = _rec_spec(body)
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if body.reason is not None:
             kwargs["reason"] = body.reason
         try:
             result = getattr(htcondor.Schedd(), method)(spec, **kwargs)
         except Exception as exp:
             logger.exception(f"{method} failed: {exp}")
-            raise HTTPException(status_code=500, detail=str(exp))
+            raise HTTPException(status_code=500, detail=str(exp)) from exp
         return _rec_result(result)
 
     router.add_api_route(
@@ -863,13 +882,13 @@ for _rec_route, _rec_method in {
 def _register_rec_update(route: str, method: str) -> None:
     """Register a POST endpoint that updates user (or project) records."""
 
-    async def rec_update(body: CondorRecUpdate) -> Dict[str, Any]:
+    async def rec_update(body: CondorRecUpdate) -> dict[str, Any]:
         logger.info(f"Applying {method}")
         try:
             result = getattr(htcondor.Schedd(), method)(_rec_ads(body.ads))
         except Exception as exp:
             logger.exception(f"{method} failed: {exp}")
-            raise HTTPException(status_code=500, detail=str(exp))
+            raise HTTPException(status_code=500, detail=str(exp)) from exp
         return _rec_result(result)
 
     router.add_api_route(
@@ -895,9 +914,9 @@ for _update_route, _update_method in {
 @router.get("/condor_status")
 async def condor_status(
     ad_type: str = "any",
-    constraint: Optional[str] = None,
-    projection: Optional[str] = None,
-) -> List[CondorStatus]:
+    constraint: str | None = None,
+    projection: str | None = None,
+) -> list[CondorStatus]:
     ad_type_enum = AD_TYPES.get(ad_type.lower())
     if ad_type_enum is None:
         raise HTTPException(status_code=400, detail=f"Unknown ad type: {ad_type}")
@@ -915,7 +934,7 @@ async def condor_status(
         except Exception as exp:
             logger.exception(f"Could not convert node data {exp}")
             logger.error(f"Node data looks like: {n}")
-            raise HTTPException(500, f"{exp}")
+            raise HTTPException(500, f"{exp}") from exp
     logger.info(f"Found {len(nodes)} nodes")
 
     return nodes
@@ -925,8 +944,8 @@ async def condor_status(
 async def condor_status_by_name(
     name: str,
     ad_type: str = "any",
-    constraint: Optional[str] = None,
-    projection: Optional[str] = None,
+    constraint: str | None = None,
+    projection: str | None = None,
 ) -> CondorStatus:
     ad_type_enum = AD_TYPES.get(ad_type.lower())
     if ad_type_enum is None:
@@ -949,12 +968,14 @@ async def condor_status_by_name(
     except Exception as exp:
         logger.exception(f"Could not convert node data {exp}")
         logger.error(f"Node data looks like: {ads[0]}")
-        raise HTTPException(status_code=500, detail="Error converting node data")
+        raise HTTPException(
+            status_code=500, detail="Error converting node data"
+        ) from exp
     return node
 
 
 @router.get("/condor_nodes")
-async def condor_nodes() -> List[CondorStatus]:
+async def condor_nodes() -> list[CondorStatus]:
     coll = htcondor.Collector()
     nodes = []
     for n in coll.query(constraint='MyType=="Machine"'):
@@ -964,7 +985,7 @@ async def condor_nodes() -> List[CondorStatus]:
         except Exception as exp:
             logger.exception(f"Could not convert job data {exp}")
             logger.error(f"Job data looks like: {n}")
-            raise HTTPException(500, f"{exp}")
+            raise HTTPException(500, f"{exp}") from exp
     logger.info(f"Found {len(nodes)} nodes")
 
     return nodes
@@ -976,8 +997,8 @@ async def condor_nodes() -> List[CondorStatus]:
 @router.get("/condor_locate/{daemon_type}")
 async def condor_locate(
     daemon_type: str,
-    name: Optional[str] = None,
-) -> Dict[str, Any]:
+    name: str | None = None,
+) -> dict[str, Any]:
     daemon_type_enum = DAEMON_TYPES.get(daemon_type.lower())
     if daemon_type_enum is None:
         raise HTTPException(
@@ -996,7 +1017,7 @@ async def condor_locate(
 @router.get("/condor_locate_all/{daemon_type}")
 async def condor_locate_all(
     daemon_type: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     daemon_type_enum = DAEMON_TYPES.get(daemon_type.lower())
     if daemon_type_enum is None:
         raise HTTPException(
@@ -1010,10 +1031,10 @@ async def condor_locate_all(
 @router.get("/condor_direct_query/{daemon_type}")
 async def condor_direct_query(
     daemon_type: str,
-    name: Optional[str] = None,
-    projection: Optional[str] = None,
-    statistics: Optional[str] = None,
-) -> Dict[str, Any]:
+    name: str | None = None,
+    projection: str | None = None,
+    statistics: str | None = None,
+) -> dict[str, Any]:
     daemon_type_enum = DAEMON_TYPES.get(daemon_type.lower())
     if daemon_type_enum is None:
         raise HTTPException(
@@ -1033,7 +1054,7 @@ async def condor_direct_query(
         raise HTTPException(
             status_code=404,
             detail=f"Daemon {name or daemon_type} did not answer the direct query",
-        )
+        ) from exp
     return _ad_to_json(ad)
 
 
@@ -1052,7 +1073,7 @@ async def condor_advertise(
         )
     except Exception as exp:
         logger.exception(f"Could not advertise ads {exp}")
-        raise HTTPException(status_code=500, detail=str(exp))
+        raise HTTPException(status_code=500, detail=str(exp)) from exp
     return True
 
 
@@ -1060,8 +1081,7 @@ async def condor_advertise(
 # Configuration (htcondor.param)
 # ---------------------------------------------------------------------------
 @router.get("/condor_config")
-async def condor_config(
-) -> Dict[str, str]:
+async def condor_config() -> dict[str, str]:
     logger.info("Getting condor_config")
     config = {}
     for key in htcondor.param:
@@ -1084,15 +1104,14 @@ async def condor_config_attribute(
         logger.exception(f"Could not get config value for {attribute}: {exp}")
         raise HTTPException(
             status_code=404, detail=f"Config attribute {attribute} not found"
-        )
+        ) from exp
 
 
 # ---------------------------------------------------------------------------
 # Negotiator: user priorities
 # ---------------------------------------------------------------------------
 @router.get("/condor_userprio")
-async def condor_userprio(
-) -> List[Dict[str, Any]]:
+async def condor_userprio() -> list[dict[str, Any]]:
     logger.info("Getting condor_userprio")
     negotiator = htcondor.Negotiator()
     return _ads_to_json(negotiator.getPriorities())
@@ -1101,7 +1120,7 @@ async def condor_userprio(
 @router.get("/condor_userprio/{user}")
 async def condor_userprio_user(
     user: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     logger.info(f"Getting condor_userprio for {user}")
     negotiator = htcondor.Negotiator()
     return _ads_to_json(negotiator.getResourceUsage(user))
@@ -1131,3 +1150,6 @@ def metrics() -> Response:
         content=_format_metrics(),
         media_type="text/plain; version=0.0.4",
     )
+
+
+app.include_router(router)

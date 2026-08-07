@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CondorStatus(BaseModel):
@@ -8,84 +8,9 @@ class CondorStatus(BaseModel):
 
 
 class CondorSubmit(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    count: int = Field(
-        1,
-        description="Number of processes (procs) to submit for this cluster.",
-    )
-    spool: bool = Field(
-        False,
-        description=(
-            "If true, submit the job(s) on hold so their input files can later "
-            "be uploaded to the schedd's SPOOL directory via /condor_spool."
-        ),
-    )
-    jobbatchname: Optional[str] = Field(
-        None,
-        description="Desired job batch name",
-    )
-    executable: Optional[str] = Field(
-        None,
-        description="Path to the executable (relative to the submit directory).",
-    )
-    arguments: Optional[str] = Field(
-        None,
-        description=("Command-line arguments space separated"),
-    )
-    environment: Optional[str] = Field(
-        None,
-        description="Environment variables",
-    )
-    error: Optional[str] = Field(
-        None,
-        description="File that receives the job's *stderr* (defaults to /dev/null on Unix).",
-    )
-    input: Optional[str] = Field(
-        None,
-        description="File that provides *stdin* to the job (defaults to /dev/null on Unix).",
-    )
-    output: Optional[str] = Field(
-        None,
-        description="File that receives the job's *stdout* (defaults to /dev/null on Unix).",
-    )
-    log: Optional[str] = Field(
-        None,
-        description="Event-log file for the whole cluster.",
-    )
-    log_xml: Optional[bool] = Field(
-        None,
-        description="If true, the event log is written in ClassAd XML.",
-    )
-    priority: Optional[int | str] = Field(
-        None,
-        description="Job priority (integer, default 0).",
-    )
-    request_cpus: Optional[int | str] = Field(
-        None,
-        description="Number of CPU cores requested (default 1).",
-    )
-    request_memory: Optional[str] = Field(
-        None,
-        description="Memory request - stored internally as KiB.  Accepts int (KiB) or str with units.",
-    )
-    request_disk: Optional[str] = Field(
-        None,
-        description="Disk request - stored internally as KiB.  Accepts int or unit string.",
-    )
-    request_gpus: Optional[int | str] = Field(
-        None,
-        description="Number of GPUs requested.",
-    )
-    require_gpus: Optional[str] = Field(
-        None,
-        description="GPU constraint expression.",
-    )
-    request_custom: Optional[Dict[str, int]] = Field(
-        None,
-        description="Custom resources: ``request_<name> = <quantity>``.",
-    )
-    model_config = {
-        "json_schema_extra": {
+    model_config = ConfigDict(
+        extra="allow",
+        json_schema_extra={
             "example": {
                 "executable": "/usr/bin/echo",
                 "arguments": "Hello World",
@@ -97,167 +22,232 @@ class CondorSubmit(BaseModel):
                 "request_memory": "1",
                 "request_disk": "1",
             }
-        }
-    }
+        },
+    )
+    count: int = Field(
+        1,
+        description="Number of processes (procs) to submit for this cluster.",
+    )
+    spool: bool = Field(
+        False,
+        description=(
+            "If true, submit the job(s) on hold so their input files can later "
+            "be uploaded to the schedd's SPOOL directory via /condor_spool."
+        ),
+    )
+    jobbatchname: str | None = Field(
+        None,
+        description="Desired job batch name",
+    )
+    executable: str | None = Field(
+        None,
+        description="Path to the executable (relative to the submit directory).",
+    )
+    arguments: str | None = Field(
+        None,
+        description=("Command-line arguments space separated"),
+    )
+    environment: str | None = Field(
+        None,
+        description="Environment variables",
+    )
+    error: str | None = Field(
+        None,
+        description="File that receives the job's *stderr* (defaults to /dev/null on Unix).",
+    )
+    input: str | None = Field(
+        None,
+        description="File that provides *stdin* to the job (defaults to /dev/null on Unix).",
+    )
+    output: str | None = Field(
+        None,
+        description="File that receives the job's *stdout* (defaults to /dev/null on Unix).",
+    )
+    log: str | None = Field(
+        None,
+        description="Event-log file for the whole cluster.",
+    )
+    log_xml: bool | None = Field(
+        None,
+        description="If true, the event log is written in ClassAd XML.",
+    )
+    priority: int | str | None = Field(
+        None,
+        description="Job priority (integer, default 0).",
+    )
+    request_cpus: int | str | None = Field(
+        None,
+        description="Number of CPU cores requested (default 1).",
+    )
+    request_memory: str | None = Field(
+        None,
+        description="Memory request - stored internally as KiB.  Accepts int (KiB) or str with units.",
+    )
+    request_disk: str | None = Field(
+        None,
+        description="Disk request - stored internally as KiB.  Accepts int or unit string.",
+    )
+    request_gpus: int | str | None = Field(
+        None,
+        description="Number of GPUs requested.",
+    )
+    require_gpus: str | None = Field(
+        None,
+        description="GPU constraint expression.",
+    )
+    request_custom: dict[str, int] | None = Field(
+        None,
+        description="Custom resources: ``request_<name> = <quantity>``.",
+    )
 
 
 class CondorJob(BaseModel):
     # ------------------------------------------------------------------
     # Core scalar fields (most of them are directly convertible)
     # ------------------------------------------------------------------
-    JobBatchName: Optional[str] = Field(None, alias="JobBatchName")
-    In: Optional[str] = Field(None, alias="In")
-    Cmd: Optional[str] = Field(None, alias="Cmd")
-    Err: Optional[str] = Field(None, alias="Err")
-    Iwd: Optional[str] = Field(None, alias="Iwd")
-    Out: Optional[str] = Field(None, alias="Out")
-    Args: Optional[str] = Field(None, alias="Args")
-    Rank: Optional[float | str] = Field(None, alias="Rank")
-    User: Optional[str] = Field(None, alias="User")
-    Owner: Optional[str] = Field(None, alias="Owner")
-    QDate: Optional[int | str] = Field(None, alias="QDate")
-    MyType: Optional[str] = Field(None, alias="MyType")
-    ProcId: Optional[int | str] = Field(None, alias="ProcId")
-    JobPrio: Optional[int | str] = Field(None, alias="JobPrio")
-    UserLog: Optional[str] = Field(None, alias="UserLog")
-    ExitCode: Optional[int | str] = Field(None, alias="ExitCode")
-    MaxHosts: Optional[int | str] = Field(None, alias="MaxHosts")
-    MinHosts: Optional[int | str] = Field(None, alias="MinHosts")
-    NumCkpts: Optional[int | str] = Field(None, alias="NumCkpts")
-    BytesSent: Optional[float | str] = Field(None, alias="BytesSent")
-    ClusterId: Optional[int | str] = Field(None, alias="ClusterId")
-    DiskUsage: Optional[int | str] = Field(None, alias="DiskUsage")
-    ImageSize: Optional[int | str] = Field(None, alias="ImageSize")
-    JobStatus: Optional[int | str] = Field(None, alias="JobStatus")
-    StreamErr: Optional[bool] = Field(None, alias="StreamErr")
-    StreamOut: Optional[bool] = Field(None, alias="StreamOut")
-    BlockReads: Optional[int | str] = Field(None, alias="BlockReads")
-    BytesRecvd: Optional[float | str] = Field(None, alias="BytesRecvd")
-    ExitStatus: Optional[int | str] = Field(None, alias="ExitStatus")
-    TargetType: Optional[str] = Field(None, alias="TargetType")
-    TransferIn: Optional[bool] = Field(None, alias="TransferIn")
-    BlockWrites: Optional[int | str] = Field(None, alias="BlockWrites")
-    Environment: Optional[str] = Field(None, alias="Environment")
-    GlobalJobId: Optional[str] = Field(None, alias="GlobalJobId")
-    JobRunCount: Optional[int | str] = Field(None, alias="JobRunCount")
-    JobUniverse: Optional[int | str] = Field(None, alias="JobUniverse")
-    MemoryUsage: Optional[float | str] = Field(None, alias="MemoryUsage")
-    NumRestarts: Optional[int | str] = Field(None, alias="NumRestarts")
-    RequestCpus: Optional[int | str] = Field(None, alias="RequestCpus")
-    RequestDisk: Optional[int | str] = Field(None, alias="RequestDisk")
-    CurrentHosts: Optional[int | str] = Field(None, alias="CurrentHosts")
-    ExitBySignal: Optional[bool] = Field(None, alias="ExitBySignal")
-    JobStartDate: Optional[int | str] = Field(None, alias="JobStartDate")
-    NumCkpts_RAW: Optional[int | str] = Field(None, alias="NumCkpts_RAW")
-    NumJobStarts: Optional[int | str] = Field(None, alias="NumJobStarts")
-    OrigMaxHosts: Optional[int | str] = Field(None, alias="OrigMaxHosts")
-    RemoteSysCpu: Optional[float | str] = Field(None, alias="RemoteSysCpu")
-    Requirements: Optional[str] = Field(None, alias="Requirements")
-    CommittedTime: Optional[int | str] = Field(None, alias="CommittedTime")
-    CondorVersion: Optional[str] = Field(None, alias="CondorVersion")
-    DiskUsage_RAW: Optional[int | str] = Field(None, alias="DiskUsage_RAW")
-    ImageSize_RAW: Optional[int | str] = Field(None, alias="ImageSize_RAW")
-    LastJobStatus: Optional[int | str] = Field(None, alias="LastJobStatus")
-    LastMatchTime: Optional[int | str] = Field(None, alias="LastMatchTime")
-    NumJobMatches: Optional[int | str] = Field(None, alias="NumJobMatches")
-    RemoteUserCpu: Optional[float | str] = Field(None, alias="RemoteUserCpu")
-    RequestMemory: Optional[int | str] = Field(None, alias="RequestMemory")
-    CompletionDate: Optional[int | str] = Field(None, alias="CompletionDate")
-    CondorPlatform: Optional[str] = Field(None, alias="CondorPlatform")
-    ExecutableSize: Optional[int | str] = Field(None, alias="ExecutableSize")
-    LastRemoteHost: Optional[str] = Field(None, alias="LastRemoteHost")
-    NumSystemHolds: Optional[int | str] = Field(None, alias="NumSystemHolds")
-    BlockReadKbytes: Optional[int | str] = Field(None, alias="BlockReadKbytes")
-    CpusProvisioned: Optional[int | str] = Field(None, alias="CpusProvisioned")
-    DiskProvisioned: Optional[int | str] = Field(None, alias="DiskProvisioned")
-    GPUsProvisioned: Optional[int | str] = Field(None, alias="GPUsProvisioned")
-    JobNotification: Optional[int | str] = Field(None, alias="JobNotification")
-    JobSubmitMethod: Optional[int | str] = Field(None, alias="JobSubmitMethod")
-    LeaveJobInQueue: Optional[bool] = Field(None, alias="LeaveJobInQueue")
-    NumShadowStarts: Optional[int | str] = Field(None, alias="NumShadowStarts")
-    ResidentSetSize: Optional[int | str] = Field(None, alias="ResidentSetSize")
-    StartdPrincipal: Optional[str] = Field(None, alias="StartdPrincipal")
-    BlockWriteKbytes: Optional[int | str] = Field(None, alias="BlockWriteKbytes")
-    FileSystemDomain: Optional[str] = Field(None, alias="FileSystemDomain")
-    JobLeaseDuration: Optional[int | str] = Field(None, alias="JobLeaseDuration")
-    MachineAttrCpus0: Optional[int | str] = Field(None, alias="MachineAttrCpus0")
-    RecentBlockReads: Optional[int | str] = Field(None, alias="RecentBlockReads")
-    TotalSubmitProcs: Optional[int | str] = Field(None, alias="TotalSubmitProcs")
-    TotalSuspensions: Optional[int | str] = Field(None, alias="TotalSuspensions")
-    CommittedSlotTime: Optional[float | str] = Field(None, alias="CommittedSlotTime")
-    FirstJobMatchDate: Optional[int | str] = Field(None, alias="FirstJobMatchDate")
-    LastPublicClaimId: Optional[str] = Field(None, alias="LastPublicClaimId")
-    MemoryProvisioned: Optional[int | str] = Field(None, alias="MemoryProvisioned")
-    NumJobCompletions: Optional[int | str] = Field(None, alias="NumJobCompletions")
-    RecentBlockWrites: Optional[int | str] = Field(None, alias="RecentBlockWrites")
-    ActivationDuration: Optional[int | str] = Field(None, alias="ActivationDuration")
-    CumulativeSlotTime: Optional[float | str] = Field(None, alias="CumulativeSlotTime")
-    ExecutableSize_RAW: Optional[int | str] = Field(None, alias="ExecutableSize_RAW")
-    LastSuspensionTime: Optional[int | str] = Field(None, alias="LastSuspensionTime")
-    TerminationPending: Optional[bool] = Field(None, alias="TerminationPending")
-    TransferInputStats: Dict = Field(default_factory=dict, alias="TransferInputStats")
-    InitialWaitDuration: Optional[int | str] = Field(None, alias="InitialWaitDuration")
-    JobCurrentStartDate: Optional[int | str] = Field(None, alias="JobCurrentStartDate")
-    JobFinishedHookDone: Optional[int | str] = Field(None, alias="JobFinishedHookDone")
-    LastJobLeaseRenewal: Optional[int | str] = Field(None, alias="LastJobLeaseRenewal")
-    RemoteWallClockTime: Optional[float | str] = Field(
-        None, alias="RemoteWallClockTime"
-    )
-    ResidentSetSize_RAW: Optional[int | str] = Field(None, alias="ResidentSetSize_RAW")
-    ShouldTransferFiles: Optional[str] = Field(None, alias="ShouldTransferFiles")
-    TransferInputSizeMB: Optional[int | str] = Field(None, alias="TransferInputSizeMB")
-    TransferOutputStats: Dict = Field(default_factory=dict, alias="TransferOutputStats")
-    EnteredCurrentStatus: Optional[int | str] = Field(
-        None, alias="EnteredCurrentStatus"
-    )
-    StatsLifetimeStarter: Optional[int | str] = Field(
-        None, alias="StatsLifetimeStarter"
-    )
-    WhenToTransferOutput: Optional[str] = Field(None, alias="WhenToTransferOutput")
-    RecentBlockReadKbytes: Optional[int | str] = Field(
-        None, alias="RecentBlockReadKbytes"
-    )
-    CumulativeRemoteSysCpu: Optional[float | str] = Field(
+    JobBatchName: str | None = Field(None, alias="JobBatchName")
+    In: str | None = Field(None, alias="In")
+    Cmd: str | None = Field(None, alias="Cmd")
+    Err: str | None = Field(None, alias="Err")
+    Iwd: str | None = Field(None, alias="Iwd")
+    Out: str | None = Field(None, alias="Out")
+    Args: str | None = Field(None, alias="Args")
+    Rank: float | str | None = Field(None, alias="Rank")
+    User: str | None = Field(None, alias="User")
+    Owner: str | None = Field(None, alias="Owner")
+    QDate: int | str | None = Field(None, alias="QDate")
+    MyType: str | None = Field(None, alias="MyType")
+    ProcId: int | str | None = Field(None, alias="ProcId")
+    JobPrio: int | str | None = Field(None, alias="JobPrio")
+    UserLog: str | None = Field(None, alias="UserLog")
+    ExitCode: int | str | None = Field(None, alias="ExitCode")
+    MaxHosts: int | str | None = Field(None, alias="MaxHosts")
+    MinHosts: int | str | None = Field(None, alias="MinHosts")
+    NumCkpts: int | str | None = Field(None, alias="NumCkpts")
+    BytesSent: float | str | None = Field(None, alias="BytesSent")
+    ClusterId: int | str | None = Field(None, alias="ClusterId")
+    DiskUsage: int | str | None = Field(None, alias="DiskUsage")
+    ImageSize: int | str | None = Field(None, alias="ImageSize")
+    JobStatus: int | str | None = Field(None, alias="JobStatus")
+    StreamErr: bool | None = Field(None, alias="StreamErr")
+    StreamOut: bool | None = Field(None, alias="StreamOut")
+    BlockReads: int | str | None = Field(None, alias="BlockReads")
+    BytesRecvd: float | str | None = Field(None, alias="BytesRecvd")
+    ExitStatus: int | str | None = Field(None, alias="ExitStatus")
+    TargetType: str | None = Field(None, alias="TargetType")
+    TransferIn: bool | None = Field(None, alias="TransferIn")
+    BlockWrites: int | str | None = Field(None, alias="BlockWrites")
+    Environment: str | None = Field(None, alias="Environment")
+    GlobalJobId: str | None = Field(None, alias="GlobalJobId")
+    JobRunCount: int | str | None = Field(None, alias="JobRunCount")
+    JobUniverse: int | str | None = Field(None, alias="JobUniverse")
+    MemoryUsage: float | str | None = Field(None, alias="MemoryUsage")
+    NumRestarts: int | str | None = Field(None, alias="NumRestarts")
+    RequestCpus: int | str | None = Field(None, alias="RequestCpus")
+    RequestDisk: int | str | None = Field(None, alias="RequestDisk")
+    CurrentHosts: int | str | None = Field(None, alias="CurrentHosts")
+    ExitBySignal: bool | None = Field(None, alias="ExitBySignal")
+    JobStartDate: int | str | None = Field(None, alias="JobStartDate")
+    NumCkpts_RAW: int | str | None = Field(None, alias="NumCkpts_RAW")
+    NumJobStarts: int | str | None = Field(None, alias="NumJobStarts")
+    OrigMaxHosts: int | str | None = Field(None, alias="OrigMaxHosts")
+    RemoteSysCpu: float | str | None = Field(None, alias="RemoteSysCpu")
+    Requirements: str | None = Field(None, alias="Requirements")
+    CommittedTime: int | str | None = Field(None, alias="CommittedTime")
+    CondorVersion: str | None = Field(None, alias="CondorVersion")
+    DiskUsage_RAW: int | str | None = Field(None, alias="DiskUsage_RAW")
+    ImageSize_RAW: int | str | None = Field(None, alias="ImageSize_RAW")
+    LastJobStatus: int | str | None = Field(None, alias="LastJobStatus")
+    LastMatchTime: int | str | None = Field(None, alias="LastMatchTime")
+    NumJobMatches: int | str | None = Field(None, alias="NumJobMatches")
+    RemoteUserCpu: float | str | None = Field(None, alias="RemoteUserCpu")
+    RequestMemory: int | str | None = Field(None, alias="RequestMemory")
+    CompletionDate: int | str | None = Field(None, alias="CompletionDate")
+    CondorPlatform: str | None = Field(None, alias="CondorPlatform")
+    ExecutableSize: int | str | None = Field(None, alias="ExecutableSize")
+    LastRemoteHost: str | None = Field(None, alias="LastRemoteHost")
+    NumSystemHolds: int | str | None = Field(None, alias="NumSystemHolds")
+    BlockReadKbytes: int | str | None = Field(None, alias="BlockReadKbytes")
+    CpusProvisioned: int | str | None = Field(None, alias="CpusProvisioned")
+    DiskProvisioned: int | str | None = Field(None, alias="DiskProvisioned")
+    GPUsProvisioned: int | str | None = Field(None, alias="GPUsProvisioned")
+    JobNotification: int | str | None = Field(None, alias="JobNotification")
+    JobSubmitMethod: int | str | None = Field(None, alias="JobSubmitMethod")
+    LeaveJobInQueue: bool | None = Field(None, alias="LeaveJobInQueue")
+    NumShadowStarts: int | str | None = Field(None, alias="NumShadowStarts")
+    ResidentSetSize: int | str | None = Field(None, alias="ResidentSetSize")
+    StartdPrincipal: str | None = Field(None, alias="StartdPrincipal")
+    BlockWriteKbytes: int | str | None = Field(None, alias="BlockWriteKbytes")
+    FileSystemDomain: str | None = Field(None, alias="FileSystemDomain")
+    JobLeaseDuration: int | str | None = Field(None, alias="JobLeaseDuration")
+    MachineAttrCpus0: int | str | None = Field(None, alias="MachineAttrCpus0")
+    RecentBlockReads: int | str | None = Field(None, alias="RecentBlockReads")
+    TotalSubmitProcs: int | str | None = Field(None, alias="TotalSubmitProcs")
+    TotalSuspensions: int | str | None = Field(None, alias="TotalSuspensions")
+    CommittedSlotTime: float | str | None = Field(None, alias="CommittedSlotTime")
+    FirstJobMatchDate: int | str | None = Field(None, alias="FirstJobMatchDate")
+    LastPublicClaimId: str | None = Field(None, alias="LastPublicClaimId")
+    MemoryProvisioned: int | str | None = Field(None, alias="MemoryProvisioned")
+    NumJobCompletions: int | str | None = Field(None, alias="NumJobCompletions")
+    RecentBlockWrites: int | str | None = Field(None, alias="RecentBlockWrites")
+    ActivationDuration: int | str | None = Field(None, alias="ActivationDuration")
+    CumulativeSlotTime: float | str | None = Field(None, alias="CumulativeSlotTime")
+    ExecutableSize_RAW: int | str | None = Field(None, alias="ExecutableSize_RAW")
+    LastSuspensionTime: int | str | None = Field(None, alias="LastSuspensionTime")
+    TerminationPending: bool | None = Field(None, alias="TerminationPending")
+    TransferInputStats: dict = Field(default_factory=dict, alias="TransferInputStats")
+    InitialWaitDuration: int | str | None = Field(None, alias="InitialWaitDuration")
+    JobCurrentStartDate: int | str | None = Field(None, alias="JobCurrentStartDate")
+    JobFinishedHookDone: int | str | None = Field(None, alias="JobFinishedHookDone")
+    LastJobLeaseRenewal: int | str | None = Field(None, alias="LastJobLeaseRenewal")
+    RemoteWallClockTime: float | str | None = Field(None, alias="RemoteWallClockTime")
+    ResidentSetSize_RAW: int | str | None = Field(None, alias="ResidentSetSize_RAW")
+    ShouldTransferFiles: str | None = Field(None, alias="ShouldTransferFiles")
+    TransferInputSizeMB: int | str | None = Field(None, alias="TransferInputSizeMB")
+    TransferOutputStats: dict = Field(default_factory=dict, alias="TransferOutputStats")
+    EnteredCurrentStatus: int | str | None = Field(None, alias="EnteredCurrentStatus")
+    StatsLifetimeStarter: int | str | None = Field(None, alias="StatsLifetimeStarter")
+    WhenToTransferOutput: str | None = Field(None, alias="WhenToTransferOutput")
+    RecentBlockReadKbytes: int | str | None = Field(None, alias="RecentBlockReadKbytes")
+    CumulativeRemoteSysCpu: float | str | None = Field(
         None, alias="CumulativeRemoteSysCpu"
     )
-    ExecuteDirWasEncrypted: Optional[bool] = Field(None, alias="ExecuteDirWasEncrypted")
-    MachineAttrSlotWeight0: Optional[int | str] = Field(
+    ExecuteDirWasEncrypted: bool | None = Field(None, alias="ExecuteDirWasEncrypted")
+    MachineAttrSlotWeight0: int | str | None = Field(
         None, alias="MachineAttrSlotWeight0"
     )
-    RecentBlockWriteKbytes: Optional[int | str] = Field(
+    RecentBlockWriteKbytes: int | str | None = Field(
         None, alias="RecentBlockWriteKbytes"
     )
-    ActivationSetupDuration: Optional[int | str] = Field(
+    ActivationSetupDuration: int | str | None = Field(
         None, alias="ActivationSetupDuration"
     )
-    CommittedSuspensionTime: Optional[int | str] = Field(
+    CommittedSuspensionTime: int | str | None = Field(
         None, alias="CommittedSuspensionTime"
     )
-    CumulativeRemoteUserCpu: Optional[float | str] = Field(
+    CumulativeRemoteUserCpu: float | str | None = Field(
         None, alias="CumulativeRemoteUserCpu"
     )
-    LastRemoteWallClockTime: Optional[float | str] = Field(
+    LastRemoteWallClockTime: float | str | None = Field(
         None, alias="LastRemoteWallClockTime"
     )
-    TransferInputFileCounts: Dict[str, int] = Field(
+    TransferInputFileCounts: dict[str, int] = Field(
         default_factory=dict, alias="TransferInputFileCounts"
     )
-    CumulativeSuspensionTime: Optional[int | str] = Field(
+    CumulativeSuspensionTime: int | str | None = Field(
         None, alias="CumulativeSuspensionTime"
     )
-    ActivationTeardownDuration: Optional[int | str] = Field(
+    ActivationTeardownDuration: int | str | None = Field(
         None, alias="ActivationTeardownDuration"
     )
-    JobCurrentReconnectAttempt: Optional[None] = Field(
-        None, alias="JobCurrentReconnectAttempt"
-    )
-    RecentStatsLifetimeStarter: Optional[int | str] = Field(
+    JobCurrentReconnectAttempt: None = Field(None, alias="JobCurrentReconnectAttempt")
+    RecentStatsLifetimeStarter: int | str | None = Field(
         None, alias="RecentStatsLifetimeStarter"
     )
-    ActivationExecutionDuration: Optional[int | str] = Field(
+    ActivationExecutionDuration: int | str | None = Field(
         None, alias="ActivationExecutionDuration"
     )
-    JobCurrentStartExecutingDate: Optional[int | str] = Field(
+    JobCurrentStartExecutingDate: int | str | None = Field(
         None, alias="JobCurrentStartExecutingDate"
     )
 
@@ -274,7 +264,7 @@ class CondorJob(BaseModel):
         "CumulativeRemoteSysCpu",
         "CumulativeRemoteUserCpu",
     )
-    def _try_float(cls, v: Any) -> Optional[float | str]:
+    def _try_float(cls, v: Any) -> float | str | None:
         if v is None:
             return None
         elif isinstance(v, (int, float)):
@@ -291,7 +281,7 @@ class CondorJob(BaseModel):
         "TerminationPending",
         "ExecuteDirWasEncrypted",
     )
-    def _boolify(cls, v: Any) -> Optional[bool]:
+    def _boolify(cls, v: Any) -> bool | None:
         if v is None:
             return None
         if isinstance(v, bool):
@@ -317,7 +307,7 @@ class CondorJob(BaseModel):
         "EnteredCurrentStatus",
         "JobCurrentStartExecutingDate",
     )
-    def _intify(cls, v: Any) -> Optional[int | str]:
+    def _intify(cls, v: Any) -> int | str | None:
         if v is None:
             return None
         if isinstance(v, int):
@@ -329,23 +319,23 @@ class CondorJob(BaseModel):
 
 
 class CondorSubmitResults(BaseModel):
-    cluster: Optional[str | int] = Field(
+    cluster: str | int | None = Field(
         None,
         description=("Cluster ID"),
     )
-    clusterad: Optional[str | CondorJob] = Field(
+    clusterad: str | CondorJob | None = Field(
         None,
         description=("CondorJob definition from submission"),
     )
-    first_proc: Optional[str | int] = Field(
+    first_proc: str | int | None = Field(
         None,
         description=("First Proc"),
     )
-    num_procs: Optional[str | int] = Field(
+    num_procs: str | int | None = Field(
         None,
         description=("Number of Proc"),
     )
-    submit_script: Optional[str] = Field(
+    submit_script: str | None = Field(
         None,
         description=("Rendered Submit Script"),
     )
@@ -376,32 +366,32 @@ class CondorSubmitText(BaseModel):
 
 
 class CondorJobAction(BaseModel):
-    job_ids: Optional[List[str]] = Field(
+    job_ids: list[str] | None = Field(
         None,
         description=(
             "Job IDs to act on, e.g. ``['123.0', '123.1']`` or ``['123']`` "
             "for a whole cluster.  Mutually exclusive with ``constraint``."
         ),
     )
-    constraint: Optional[str] = Field(
+    constraint: str | None = Field(
         None,
         description=(
             "ClassAd expression selecting which jobs to act on, e.g. "
-            "``Owner == \"somebody\"``.  Mutually exclusive with ``job_ids``."
+            '``Owner == "somebody"``.  Mutually exclusive with ``job_ids``.'
         ),
     )
-    reason: Optional[str] = Field(
+    reason: str | None = Field(
         None,
         description="Free-form justification for the action.",
     )
 
 
 class CondorEdit(BaseModel):
-    job_ids: Optional[List[str]] = Field(
+    job_ids: list[str] | None = Field(
         None,
         description="Job IDs to edit.  Mutually exclusive with ``constraint``.",
     )
-    constraint: Optional[str] = Field(
+    constraint: str | None = Field(
         None,
         description="ClassAd expression selecting which jobs to edit.",
     )
@@ -416,11 +406,11 @@ class CondorEdit(BaseModel):
 
 
 class CondorExport(BaseModel):
-    job_ids: Optional[List[str]] = Field(
+    job_ids: list[str] | None = Field(
         None,
         description="Job IDs to export.  Mutually exclusive with ``constraint``.",
     )
-    constraint: Optional[str] = Field(
+    constraint: str | None = Field(
         None,
         description="ClassAd expression selecting which jobs to export.",
     )
@@ -442,11 +432,11 @@ class CondorImport(BaseModel):
 
 
 class CondorUnexport(BaseModel):
-    job_ids: Optional[List[str]] = Field(
+    job_ids: list[str] | None = Field(
         None,
         description="Job IDs to unexport.  Mutually exclusive with ``constraint``.",
     )
-    constraint: Optional[str] = Field(
+    constraint: str | None = Field(
         None,
         description="ClassAd expression selecting which jobs to unexport.",
     )
@@ -455,11 +445,11 @@ class CondorUnexport(BaseModel):
 class CondorJobSpec(BaseModel):
     """Select a set of jobs by explicit IDs or by a constraint expression."""
 
-    job_ids: Optional[List[str]] = Field(
+    job_ids: list[str] | None = Field(
         None,
         description="Job IDs, e.g. ``['123.0', '123.1']``.  Mutually exclusive with ``constraint``.",
     )
-    constraint: Optional[str] = Field(
+    constraint: str | None = Field(
         None,
         description="ClassAd expression selecting which jobs to act on.",
     )
@@ -468,18 +458,18 @@ class CondorJobSpec(BaseModel):
 class CondorRecAction(BaseModel):
     """Act on user or project accounting records."""
 
-    spec: Optional[Union[str, List[str]]] = Field(
+    spec: str | list[str] | None = Field(
         None,
         description=(
             "Record name(s): a single name, a list of names, or for updates "
             "a list of ClassAd-style dicts.  Mutually exclusive with ``constraint``."
         ),
     )
-    constraint: Optional[str] = Field(
+    constraint: str | None = Field(
         None,
         description="ClassAd expression selecting which records to act on.",
     )
-    reason: Optional[str] = Field(
+    reason: str | None = Field(
         None,
         description="Free-form justification for the action.",
     )
@@ -488,7 +478,7 @@ class CondorRecAction(BaseModel):
 class CondorRecUpdate(BaseModel):
     """Update user or project accounting records."""
 
-    ads: List[Dict[str, Any]] = Field(
+    ads: list[dict[str, Any]] = Field(
         ...,
         description=(
             "List of ClassAd-style dicts with the new attribute values.  Each "
@@ -516,7 +506,7 @@ class CondorRefreshGSIProxy(BaseModel):
 class CondorOCU(BaseModel):
     """One-Click-University claim request, expressed as a ClassAd."""
 
-    request: Dict[str, Any] = Field(
+    request: dict[str, Any] = Field(
         ...,
         description=(
             "ClassAd representing the OCU claim request (must contain Owner and "
@@ -526,7 +516,7 @@ class CondorOCU(BaseModel):
 
 
 class CondorAdvertise(BaseModel):
-    ads: List[Dict[str, Any]] = Field(
+    ads: list[dict[str, Any]] = Field(
         ...,
         description="ClassAd(s) to advertise to the collector.",
     )

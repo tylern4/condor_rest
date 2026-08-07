@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -43,13 +42,13 @@ def condor_submit_cli(
 # condor_q
 # ---------------------------------------------------------------------------
 def condor_q_cli(
-    job_id: Optional[str] = typer.Argument(
+    job_id: str | None = typer.Argument(
         None, help="Job ID to query: a cluster ID or 'cluster.proc'."
     ),
-    constraint: Optional[str] = typer.Option(
+    constraint: str | None = typer.Option(
         None, "--constraint", "-c", help="ClassAd expression selecting jobs."
     ),
-    projection: Optional[str] = typer.Option(
+    projection: str | None = typer.Option(
         None, "--projection", help="Comma-separated list of attributes to return."
     ),
     limit: int = typer.Option(
@@ -86,7 +85,7 @@ def condor_rm_cli(
     job_id: str = typer.Argument(
         ..., help="Job ID to remove: a cluster ID or 'cluster.proc'."
     ),
-    reason: Optional[str] = typer.Option(
+    reason: str | None = typer.Option(
         None, "--reason", "-r", help="Free-form justification for the removal."
     ),
     url: str = typer.Option(
@@ -106,19 +105,19 @@ def condor_rm_cli(
 # condor_history
 # ---------------------------------------------------------------------------
 def condor_history_cli(
-    job_id: Optional[str] = typer.Argument(
+    job_id: str | None = typer.Argument(
         None, help="Job ID to look up: a cluster ID or 'cluster.proc'."
     ),
-    constraint: Optional[str] = typer.Option(
+    constraint: str | None = typer.Option(
         None, "--constraint", "-c", help="ClassAd expression selecting jobs."
     ),
-    projection: Optional[str] = typer.Option(
+    projection: str | None = typer.Option(
         None, "--projection", help="Comma-separated list of attributes to return."
     ),
     match: int = typer.Option(
         -1, "--match", "-n", help="Maximum number of jobs to return (-1 = all)."
     ),
-    since: Optional[str] = typer.Option(
+    since: str | None = typer.Option(
         None, "--since", help="Only return jobs matching since this time."
     ),
     url: str = typer.Option(
@@ -151,16 +150,16 @@ def condor_history_cli(
 # condor_status
 # ---------------------------------------------------------------------------
 def condor_status_cli(
-    name: Optional[str] = typer.Argument(
+    name: str | None = typer.Argument(
         None, help="Name of a specific ad to query (e.g. a slot or daemon name)."
     ),
     ad_type: str = typer.Option(
         "any", "--ad-type", help="Ad type to query (any, startd, schedd, ...)."
     ),
-    constraint: Optional[str] = typer.Option(
+    constraint: str | None = typer.Option(
         None, "--constraint", "-c", help="ClassAd expression selecting ads."
     ),
-    projection: Optional[str] = typer.Option(
+    projection: str | None = typer.Option(
         None, "--projection", help="Comma-separated list of attributes to return."
     ),
     url: str = typer.Option(
@@ -187,13 +186,13 @@ def condor_status_cli(
 # condor_hold / condor_release
 # ---------------------------------------------------------------------------
 def condor_hold_cli(
-    job_id: Optional[str] = typer.Argument(
+    job_id: str | None = typer.Argument(
         None, help="Job ID to hold: a cluster ID or 'cluster.proc'."
     ),
-    constraint: Optional[str] = typer.Option(
+    constraint: str | None = typer.Option(
         None, "--constraint", "-c", help="ClassAd expression selecting jobs."
     ),
-    reason: Optional[str] = typer.Option(
+    reason: str | None = typer.Option(
         None, "--reason", "-r", help="Free-form justification for the hold."
     ),
     url: str = typer.Option(
@@ -216,13 +215,13 @@ def condor_hold_cli(
 
 
 def condor_release_cli(
-    job_id: Optional[str] = typer.Argument(
+    job_id: str | None = typer.Argument(
         None, help="Job ID to release: a cluster ID or 'cluster.proc'."
     ),
-    constraint: Optional[str] = typer.Option(
+    constraint: str | None = typer.Option(
         None, "--constraint", "-c", help="ClassAd expression selecting jobs."
     ),
-    reason: Optional[str] = typer.Option(
+    reason: str | None = typer.Option(
         None, "--reason", "-r", help="Free-form justification for the release."
     ),
     url: str = typer.Option(

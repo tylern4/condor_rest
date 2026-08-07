@@ -2,6 +2,7 @@ ARG VERSION=25.7.2-el9
 FROM htcondor/mini:$VERSION
 
 
+# hadolint ignore=DL3002,DL3066  # runtime user is set via K8s security context
 USER root
 RUN mkdir -p /logs/condor && chmod -R a+rwx /logs/condor
 RUN mkdir -p /scratch && chmod -R a+rwx /scratch
@@ -18,7 +19,7 @@ ARG GID=95745
 
 # Create a group and user
 RUN groupadd -g $GID $USER && \
-    useradd -m -u $UID -g $GID -s /bin/bash $USER
+    useradd -l -m -u $UID -g $GID -s /bin/bash $USER
 
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

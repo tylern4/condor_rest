@@ -1,8 +1,10 @@
-import sys
-import types
-import json
 import enum
+import json
+import sys
 import time
+import types
+from typing import ClassVar
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -120,7 +122,7 @@ classad2.ExprTree = _DummyExprTree
 sys.modules["classad2"] = classad2
 
 # Import the FastAPI application after the dummy module is in place.
-from htcondor_rest.app import app
+from htcondor_rest.app import app  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -178,12 +180,12 @@ def mock_htcondor(monkeypatch):
     # Dummy HTCondor objects that the FastAPI routes will interact with
     # -------------------------------------------------------------------
     class DummySchedd:
-        jobs: list[DummyJob] = []
-        history_data: list[DummyJob] = []
-        user_ads: list[DummyJob] = []
-        project_ads: list[DummyJob] = []
-        epoch_history: list[DummyJob] = []
-        daemon_history: list[DummyJob] = []
+        jobs: ClassVar[list[DummyJob]] = []
+        history_data: ClassVar[list[DummyJob]] = []
+        user_ads: ClassVar[list[DummyJob]] = []
+        project_ads: ClassVar[list[DummyJob]] = []
+        epoch_history: ClassVar[list[DummyJob]] = []
+        daemon_history: ClassVar[list[DummyJob]] = []
         submit_result: DummySubmitResult = DummySubmitResult()
         spooled: DummySubmitResult | None = None
         retrieved: object = None
@@ -218,7 +220,9 @@ def mock_htcondor(monkeypatch):
                 ]
             return self.history_data
 
-        def jobEpochHistory(self, constraint=None, projection=None, match=-1, since=None):
+        def jobEpochHistory(
+            self, constraint=None, projection=None, match=-1, since=None
+        ):
             return self.epoch_history
 
         def daemonHistory(self, constraint=None, projection=None, match=-1, since=None):
@@ -257,7 +261,6 @@ def mock_htcondor(monkeypatch):
 
         def retrieve(self, job_spec):
             type(self).retrieved = job_spec
-            return None
 
         def refreshGSIProxy(self, cluster, proc, proxy_filename, lifetime=-1):
             return lifetime
@@ -305,23 +308,21 @@ def mock_htcondor(monkeypatch):
             return DummyJob({"ProjectRec": "updated"})
 
     class DummyCollector:
-        nodes: list[DummyJob] = []
+        nodes: ClassVar[list[DummyJob]] = []
         located: DummyJob | None = None
-        located_all: list[DummyJob] = []
+        located_all: ClassVar[list[DummyJob]] = []
         direct_queried: DummyJob = DummyJob({"MyType": "Machine"})
         advertised: object = None
 
         def __init__(self):
             pass
 
-        def query(self, ad_type=None, constraint=None, projection=None, statistics=None):
+        def query(
+            self, ad_type=None, constraint=None, projection=None, statistics=None
+        ):
             if constraint and constraint.startswith('Name == "'):
                 name = constraint.split('Name == "')[1].rstrip('"')
-                return [
-                    node
-                    for node in self.nodes
-                    if node._data.get("Name") == name
-                ]
+                return [node for node in self.nodes if node._data.get("Name") == name]
             return self.nodes
 
         def locate(self, daemon_type, name=None):
@@ -341,8 +342,8 @@ def mock_htcondor(monkeypatch):
             self.data = data
 
     class DummyNegotiator:
-        priorities: list[DummyJob] = []
-        resource_usage: list[DummyJob] = []
+        priorities: ClassVar[list[DummyJob]] = []
+        resource_usage: ClassVar[list[DummyJob]] = []
 
         def __init__(self):
             pass
@@ -453,9 +454,7 @@ def test_get_queue_constraint(client, mock_htcondor):
         DummyJob({"ClusterId": 123, "JobStatus": 1}),
         DummyJob({"ClusterId": 456, "JobStatus": 1}),
     ]
-    response = client.get(
-        "/condor_q?constraint=ClusterId==123", headers=AUTH_HEADERS
-    )
+    response = client.get("/condor_q?constraint=ClusterId==123", headers=AUTH_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
@@ -665,7 +664,6 @@ def test_condor_submit_file(client, mock_htcondor, monkeypatch):
 
 def test_condor_submit_file_invalid_text(client, mock_htcondor, monkeypatch):
     """Test that submit text the server cannot parse returns 400"""
-    DummySubmitResult = mock_htcondor["DummySubmitResult"]
     import htcondor_rest.app as app_module
 
     def bad_submit(self, text):
@@ -1038,7 +1036,12 @@ def test_condor_refresh_gsi_proxy(client, mock_htcondor):
     """Test refreshing a job's GSI proxy returns the remaining lifetime"""
     response = client.post(
         "/condor_refresh_gsi_proxy",
-        json={"cluster": 123, "proc": 0, "proxy_filename": "/tmp/proxy", "lifetime": 60},
+        json={
+            "cluster": 123,
+            "proc": 0,
+            "proxy_filename": "/tmp/proxy",
+            "lifetime": 60,
+        },
         headers=AUTH_HEADERS,
     )
     assert response.status_code == 200
@@ -1048,7 +1051,7 @@ def test_condor_refresh_gsi_proxy(client, mock_htcondor):
 def test_condor_claims(client, mock_htcondor):
     """Test querying the schedd for claimed-slot classads"""
     response = client.get(
-        "/condor_claims", params={"constraint": "Owner == \"bob\""}, headers=AUTH_HEADERS
+        "/condor_claims", params={"constraint": 'Owner == "bob"'}, headers=AUTH_HEADERS
     )
     assert response.status_code == 200
     assert response.json() == [{"ClaimId": "claim-1"}]
@@ -1122,7 +1125,7 @@ def test_rec_action_requires_spec(client, mock_htcondor):
     assert response.status_code == 400
     response = client.post(
         "/condor_add_user_rec",
-        json={"spec": "bob", "constraint": "Name == \"bob\""},
+        json={"spec": "bob", "constraint": 'Name == "bob"'},
         headers=AUTH_HEADERS,
     )
     assert response.status_code == 400
@@ -1149,7 +1152,9 @@ def test_rec_updates(client, mock_htcondor):
 def test_condor_direct_query(client, mock_htcondor):
     """Test directly querying a daemon (bypassing the collector)"""
     response = client.get(
-        "/condor_direct_query/schedd", params={"name": "schedd@host"}, headers=AUTH_HEADERS
+        "/condor_direct_query/schedd",
+        params={"name": "schedd@host"},
+        headers=AUTH_HEADERS,
     )
     assert response.status_code == 200
     assert response.json() == {"MyType": "Machine"}
