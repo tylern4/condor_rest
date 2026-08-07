@@ -6,11 +6,16 @@ readme = "README.md"
 authors = [{ name = "Nick Tyler", email = "nicholas.s.tyler.4@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
+    "httpx>=0.28",
+    "loguru>=0.7.3",
+    "typer>=0.15.0",
+]
+
+[project.optional-dependencies]
+server = [
     "fastapi>=0.136.1",
     "gunicorn>=25.3.0",
     "htcondor>=25.8.2",
-    "loguru>=0.7.3",
-    "typer>=0.15.0",
     "uvicorn>=0.46.0",
 ]
 

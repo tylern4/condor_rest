@@ -28,8 +28,8 @@ ENV UV_LINK_MODE=copy
 
 WORKDIR /app
 COPY pyproject.toml README.md ./
-RUN uv sync --no-install-project
+RUN uv sync --extra server --no-install-project
 COPY htcondor_configs/start.sh /app/start.sh
 COPY src /app/
-RUN uv sync
+RUN uv sync --extra server
 RUN chmod a+x /root && chmod -R a+rwx /app/.venv /root/.local
