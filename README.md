@@ -4,7 +4,6 @@ A REST API for HTCondor, exposing the `htcondor2` Python bindings over HTTP. It 
 
 - a **FastAPI server** that wraps `condor_q`, `condor_history`, `condor_submit`, `condor_rm`, `condor_hold`, `condor_status`, and the rest of the HTCondor admin surface,
 - a typed **Python client library** (`htcondor_rest.client.CondorClient`),
-- drop-in **CLI tools** (`condor_submit`, `condor_q`, `condor_rm`, `condor_history`, `condor_status`, `condor_hold`, `condor_release`),
 - Prometheus metrics under `/metrics`,
 - Docker images for a standalone HTCondor pool and for deployment on **Spin@NERSC**.
 
@@ -14,10 +13,10 @@ The server runs *inside* an HTCondor pool (either a full pool or a mini single-c
 
 ```
 +----------------+        Bearer token        +----------------------+        HTCondor daemons
-| condor_submit  |  ----------------------->  |  FastAPI app (uvicorn |  ---------------------->  condor_schedd
-| condor_q       |  HTTP/JSON                 |  / gunicorn)          |  htcondor2 bindings      condor_collector
-| CondorClient   |                            |  port 8008            |                          condor_negotiator
-+----------------+                            +----------------------+
+| CondorClient   |  ----------------------->  |  FastAPI app (uvicorn |  ---------------------->  condor_schedd
+|                |  HTTP/JSON                 |  / gunicorn)          |  htcondor2 bindings      condor_collector
++----------------+                            |  port 8008            |                          condor_negotiator
+                                               +----------------------+
 ```
 
 ## Repository layout
@@ -27,11 +26,10 @@ The server runs *inside* an HTCondor pool (either a full pool or a mini single-c
 | `src/htcondor_rest/app.py` | The FastAPI application with all API routes |
 | `src/htcondor_rest/models/__init__.py` | Pydantic request/response models |
 | `src/htcondor_rest/client.py` | `CondorClient` HTTP client |
-| `src/htcondor_rest/cli.py` | Typer-based CLI entry points |
 | `htcondor_configs/` | HTCondor config and container startup scripts |
 | `Dockerfile` | Full pool image (supervisord) |
 | `spin.Dockerfile` | Single-container mini-pool image for Spin@NERSC |
-| `tests/` | API, client, and CLI tests (dummy `htcondor2` module, run in CI) |
+| `tests/` | API and client tests (dummy `htcondor2` module, run in CI) |
 
 ## Quickstart
 
@@ -68,8 +66,8 @@ On the Spin image, `PASSWORDFILE` doubles as HTCondor's own `SEC_PASSWORD_FILE` 
 
 | Variable | Default | Used by | Description |
 |----------|---------|---------|-------------|
-| `CONDOR_URL` | `http://localhost:8008` | client/CLI | Base URL of the htcondor-rest server |
-| `CONDOR_PASS` | `password` | client/CLI | Bearer token for the server |
+| `CONDOR_URL` | `http://localhost:8008` | client | Base URL of the htcondor-rest server |
+| `CONDOR_PASS` | `password` | client | Bearer token for the server |
 | `PASSWORDFILE` | – | server | File of accepted API tokens (one per line) |
 | `PASSWORDS` | – | server | Semicolon-separated accepted API tokens |
 | `METRICS_INTERVAL` | `60` | server | Seconds between metrics refreshes |
@@ -237,23 +235,6 @@ with CondorClient(base_url="http://localhost:8008", token="password") as condor:
 
 `CondorClient` reads `CONDOR_URL` and `CONDOR_PASS` from the environment when no arguments are given. Non-2xx responses raise `httpx.HTTPStatusError`. There is also `tests/test.py`, a small working example.
 
-## Using the CLI
-
-The package installs drop-in `condor_*` commands that talk to the server over HTTP (they do **not** require HTCondor installed locally):
-
-```bash
-condor_q "123.0"
-condor_q --constraint 'Owner == "someone"' --projection ClusterId,JobStatus
-condor_history 123
-condor_status --ad-type startd
-condor_submit job.submit
-condor_rm 123.0 --reason "no longer needed"
-condor_hold 123.0 --reason "maintenance"
-condor_release --constraint 'Owner == "someone"'
-```
-
-All CLIs accept `--url` and `--token` (also settable via `CONDOR_URL` / `CONDOR_PASS`).
-
 ## Docker images
 
 Two images are built from this repo (see `.github/workflows/build-docker.yml`).
@@ -370,12 +351,12 @@ condor_q               # empty queue
 curl -H "Authorization: Bearer <token>" http://localhost:8008/  # {"status": true}
 ```
 
-Then submit from your laptop with the CLI or client pointed at the ingress URL:
+Then query the queue from your laptop with the Python client pointed at the ingress URL:
 
 ```bash
 CONDOR_URL=http://htcondor-rest.<namespace>.<environment>.svc.spin.nersc.org \
 CONDOR_PASS=<token> \
-condor_q
+python -c "from htcondor_rest import CondorClient; c = CondorClient(); print(c.get_queue())"
 ```
 
 ## Development and testing
@@ -409,7 +390,7 @@ A set of pre-commit hooks keeps the repo tidy. Run `pre-commit install` once, an
 - **actionlint**: lints the GitHub Actions workflows.
 - **typos**: catches typos (HTCondor daemon names like `startd` are whitelisted in `pyproject.toml`).
 
-The API and CLI tests are in `tests/test_api.py`, `tests/test_client.py`, and `tests/test_cli.py`; CI runs them on Python 3.13 and 3.14 via `.github/workflows/pytest.yml`.
+The API and client tests are in `tests/test_api.py` and `tests/test_client.py`; CI runs them on Python 3.13 and 3.14 via `.github/workflows/pytest.yml`.
 
 ## Notes and known quirks
 
