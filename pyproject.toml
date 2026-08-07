@@ -10,11 +10,19 @@ dependencies = [
     "gunicorn>=25.3.0",
     "htcondor>=25.8.2",
     "loguru>=0.7.3",
+    "typer>=0.15.0",
     "uvicorn>=0.46.0",
 ]
 
 [project.scripts]
 htcondor-rest = "htcondor_rest:main"
+condor_submit = "htcondor_rest.cli:submit_main"
+condor_q = "htcondor_rest.cli:q_main"
+condor_rm = "htcondor_rest.cli:rm_main"
+condor_history = "htcondor_rest.cli:history_main"
+condor_status = "htcondor_rest.cli:status_main"
+condor_hold = "htcondor_rest.cli:hold_main"
+condor_release = "htcondor_rest.cli:release_main"
 
 [build-system]
 requires = ["hatchling"]
